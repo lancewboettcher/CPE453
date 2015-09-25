@@ -18,11 +18,7 @@ int main() {
 
          lsReturnValue = waitpid(lsPid, &lsReturnStatus, 0);
 
-         printf("done waiting for ls\n");
-
          sortReturnValue = waitpid(sortPid, &sortReturnStatus, 0);
-
-         printf("done waiting for sort\n");
 
          if (WEXITSTATUS(lsReturnStatus) > 0) {
             fprintf(stderr, "ls returned error with exit Code: %d\n", WEXITSTATUS(lsReturnStatus));
@@ -38,22 +34,24 @@ int main() {
       }
 
       else { //sort Child
-         dup2(fds[1], STDOUT_FILENO); 
+         dup2(fds[0], STDIN_FILENO); 
+
          close(fds[0]);
          close(fds[1]);
 
-         execl("/bin/ls", "ls", (char *)0);
-         printf("ls exec failed\n");
+         execlp("sort", "sort", "-r", NULL);
+         printf("sort exec failed\n");
       }
 
    }
    else {   //ls Child
-      dup2(fds[0], STDIN_FILENO); 
+      dup2(fds[1], STDOUT_FILENO); 
+
       close(fds[0]);
       close(fds[1]);
 
-      execlp("sort", "-r", (char *)0);
-      printf("sort exec failed\n");
+      execl("/bin/ls", "ls", NULL);
+      printf("ls exec failed\n");
    }   
 
    return 0;
