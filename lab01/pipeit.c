@@ -1,3 +1,13 @@
+/*
+ * CPE 453 
+ * Lab 01 - pipeit
+ * Lance Boettcher (lboettch)
+ * Christina Sardo (csardo)
+ *
+ * Launches the pipeline “ls | sort -r > outfile” and
+ * waits for it to terminate
+*/
+
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -11,13 +21,11 @@ int main() {
 
    pipe(fds);
 
-   if (open("outfile", o_EXCL) != -1) {
-      remove("outfile");
-   }
+   if ((lsPid = fork())) {  
+      /* ls Parent */
 
-   if ((lsPid = fork())) {  //ls Parent
-
-      if ((sortPid = fork())) { //sort Parent
+      if ((sortPid = fork())) { 
+         /* sort Parent */
 
          close(fds[0]);
          close(fds[1]);
@@ -41,13 +49,15 @@ int main() {
          }
       }
 
-      else { //sort Child
+      else { 
+         /* sort Child */
+
          dup2(fds[0], STDIN_FILENO); 
 
          close(fds[0]);
          close(fds[1]);
-        
-         outputFd = open("outfile", O_RDWR | O_CREAT | O_TRUNC);
+         
+         outputFd = open("outfile", O_RDWR | O_CREAT | O_TRUNC, 0777);
          dup2(outputFd, STDOUT_FILENO);
 
          execlp("sort", "sort", "-r", NULL);
@@ -55,7 +65,9 @@ int main() {
       }
 
    }
-   else {   //ls Child
+   else {   
+      /* ls Child */
+
       dup2(fds[1], STDOUT_FILENO); 
 
       close(fds[0]);
