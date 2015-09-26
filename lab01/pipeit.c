@@ -58,6 +58,12 @@ int main() {
          close(fds[1]);
          
          outputFd = open("outfile", O_RDWR | O_CREAT | O_TRUNC, 0777);
+
+         if (outputFd < 0) {
+            fprintf(stderr, "Error opening outfile\n");
+            return -1;
+         }
+
          dup2(outputFd, STDOUT_FILENO);
 
          execlp("sort", "sort", "-r", NULL);
