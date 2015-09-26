@@ -8,9 +8,12 @@ int main() {
 
    int lsPid, sortPid, fds[2], outputFd;
    int lsReturnValue, sortReturnValue, lsReturnStatus, sortReturnStatus; 
-   FILE * outfile;
 
    pipe(fds);
+
+   if (open("outfile", o_EXCL) != -1) {
+      remove("outfile");
+   }
 
    if ((lsPid = fork())) {  //ls Parent
 
@@ -44,14 +47,7 @@ int main() {
          close(fds[0]);
          close(fds[1]);
         
-         if ((outfile = fopen("outfile", "r"))) {
-             fclose(outfile);
-             int removeID = remove("outfile");
-             printf("remove id %d\n", removeID);
-         }
-
          outputFd = open("outfile", O_RDWR | O_CREAT | O_TRUNC);
-
          dup2(outputFd, STDOUT_FILENO);
 
          execlp("sort", "sort", "-r", NULL);
