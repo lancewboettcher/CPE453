@@ -160,8 +160,8 @@ void *myMalloc(size_t size) {
       }
    }
 
-   leftoverSize = oldSize - size - sizeof(blockHeader);
-   if (leftoverSize > (MIN_BLOCK_SIZE + sizeof(blockHeader))) {
+   leftoverSize = oldSize - size;
+   if (leftoverSize > MIN_BLOCK_SIZE) {
       /* Break up block */
       newBlock = ret + size + sizeof(blockHeader);
 
@@ -173,7 +173,7 @@ void *myMalloc(size_t size) {
       printf("created new header at location %p, size %zu\n", newBlock, newBlock->size);
    }
 
-   printMemoryList(head);
+   //printMemoryList(head);
 
    return ret + sizeof(blockHeader);
 }
@@ -224,7 +224,6 @@ void myFree(void *ptr) {
    if (blockToFree != NULL) {
       printf("Freeing %p\n", blockToFree);
       blockToFree->isFree = TRUE;
-      printf("HERE\n");
    }
 }
 
@@ -275,7 +274,7 @@ int main(int argc, char *argv[], char *envp[])
 
           printf("\nPointers:\n");
           for(i = 0; i < index; i++) {
-             printf("%d : %d \n", i, *(pointers[i]));
+             printf("%d : %p - %d \n", i, pointers[i], *(pointers[i]));
           }
 
           printf("MALLOC RESPONSE ptr: %p val: %d\n", ptr, *ptr);
