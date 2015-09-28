@@ -68,13 +68,10 @@ blockHeader *getFreeBlock(size_t size) {
    blockHeader *iterator = head;
    blockHeader *prev = NULL;
 
-   //printMemoryList(iterator);
    printf("%p isFree: %d size: %zu\n", iterator, iterator->isFree, iterator->size);
 
    while (iterator != NULL && (!iterator->isFree || iterator->size < size)) {
       /* Looking for a free block big enough */
-
-      printf("in while\n");
 
       prev = iterator;
       iterator = iterator->next;
@@ -197,13 +194,38 @@ void *calloc(size_t nmemb, size_t size) {
    return ret; 
 }
 
-void free(void *ptr) {
+blockHeader *findHeader(void *ptr) {
+
+   blockHeader *iterator = head;
+
+   if (ptr < head) {
+      /* Invalid */
+      return NULL;
+   }
+
+   while (ptr > ((void *)(iterator + iterator->size + sizeof(blockHeader)))) {
+      iterator = iterator->next;
+   }
+   
+   return iterator;
+}   
+
+void myFree(void *ptr) {
 #ifdef DEBUG_MALLOC
    printf("Called my free\n");
 #endif
 
+   if (ptr == NULL) {
+      return;
+   }
 
+   blockHeader *blockToFree = findHeader(ptr);
 
+   if (blockToFree != NULL) {
+      printf("Freeing %p\n", blockToFree);
+      blockToFree->isFree = TRUE;
+      printf("HERE\n");
+   }
 }
 
 void *realloc(void *ptr, size_t size) {
@@ -223,27 +245,38 @@ int main(int argc, char *argv[], char *envp[])
    int mychar;
    int *pointers[100];
    int index = 0;
-   int i;
+   int i, j;
+   char c;
    
-   ptr = myMalloc(sizeof(int));
-   *ptr = 69;
-
-   printf("return ptr: %p val: %d\n", ptr, *ptr);
-
    while(1)
    {
           printf("Enter a character:\n");
-          scanf("%d", &mychar);
+          scanf(" %c %d", &c, &mychar);
 
-          ptr = myMalloc(sizeof(int));
-          *ptr = mychar;
-          pointers[index] = ptr;
+          if(c != 'f') {
+            ptr = myMalloc(sizeof(int));
+            *ptr = mychar;
+            pointers[index] = ptr;
 
-          for(i = 0; i <= index; i++) {
-             printf("%d : %d \n", i, *(pointers[i]));
+            index++;
+          }
+          else {
+
+            for(j = 0; j <= index; j++) {
+               if(*(pointers[j]) == mychar) {
+                  printf("Calling free on %p : val: %d\n", pointers[j], *(pointers[j]));
+                  myFree(pointers[j]);
+
+                  break;
+               }
+            }
+         
           }
 
-          index++;
+          printf("\nPointers:\n");
+          for(i = 0; i < index; i++) {
+             printf("%d : %d \n", i, *(pointers[i]));
+          }
 
           printf("MALLOC RESPONSE ptr: %p val: %d\n", ptr, *ptr);
 
