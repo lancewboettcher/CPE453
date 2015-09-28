@@ -21,7 +21,7 @@ void printMemoryList(blockHeader *iterator) {
    //blockHeader *iterator = head;
    int index = 0;
 
-   while(iterator) {
+   while (iterator) {
       printf("%d: %p size: %zu isFree: %d val: %d\n", index++, iterator, iterator->size, 
             iterator->isFree, *(int *)(iterator));
 
@@ -29,24 +29,55 @@ void printMemoryList(blockHeader *iterator) {
    }
 }
 
-blockHeader *allocateMemory(size_t size, blockHeader *prev) {
+int modifySize(int size) {
+   while (size % MIN_BLOCK_SIZE != 0) {
+      size++;
+   }
+
+   return size;
+}
+
+void *findHeadLocation(void *heapLoc) {
+
+   while ((unsigned long)heapLoc % MIN_BLOCK_SIZE != 0) {
+      heapLoc++;
+   }
+
+   return heapLoc;
+}
+
+blockHeader *allocateMemory(size_t size, blockHeader *prev, int isFirstAllocation) {
 
    printf("Allocating new memory\n");
 
-   blockHeader *newBlock = sbrk(size + sizeof(blockHeader));
+   blockHeader *newBlock;
+
+   if (isFirstAllocation) {
+      /* First Allocation. Make sure div by 16 then sbrk */
+
+      void *heapLoc = sbrk(0);
+      head = findHeadLocation(heapLoc);
+
+      if (head != heapLoc) {
+         /* Need to move head to divisible by 16 */
+         
+         void *wastedSpace = sbrk(head - heapLoc);
+         
+         if (wastedSpace == (void *) -1) {
+            /* Error with sbrk */
+            return NULL;
+         }
+      }
+   }
+   
+   newBlock = sbrk(size + sizeof(blockHeader));
 
    if (newBlock == (void *) -1) {
       /* Error with sbrk */
-
       return NULL;
    }
 
-   if (prev == NULL) {
-      /* New memory list */
-
-      head = newBlock;
-   }
-   else {
+   if (!isFirstAllocation) {
       /* Existing memory list */
 
       prev->next = newBlock;
@@ -83,24 +114,16 @@ blockHeader *getFreeBlock(size_t size) {
       printf("Get free block did not find a big enough block\n");
       
       if (size > DEFAULT_CHUNK_SIZE) {
-         iterator = allocateMemory(size, prev);
+         iterator = allocateMemory(size, prev, FALSE);
       }
       else {
-         iterator = allocateMemory(DEFAULT_CHUNK_SIZE, prev);
+         iterator = allocateMemory(DEFAULT_CHUNK_SIZE, prev, FALSE);
       }
    }
 
    printf("getFreeBlock returning location %p with size %zu\n", iterator, size);
 
    return iterator;
-}
-
-int modifySize(int size) {
-   while(size % MIN_BLOCK_SIZE != 0) {
-      size++;
-   }
-
-   return size;
 }
 
 void *myMalloc(size_t size) {
@@ -124,20 +147,18 @@ void *myMalloc(size_t size) {
       printf("Head is null. First time calling malloc? \n");
 
       if (size <= DEFAULT_CHUNK_SIZE) {
-         ret = allocateMemory(DEFAULT_CHUNK_SIZE, NULL);
+         ret = allocateMemory(DEFAULT_CHUNK_SIZE, NULL, TRUE);
       }
       else {
-         ret = allocateMemory(size, NULL);
+         ret = allocateMemory(size, NULL, TRUE);
       }
 
       if (ret == NULL) {
          /* Problem with sbrk */
-
          errno = ENOMEM;
          return NULL;
       }
 
-      head = ret;
       oldSize = ret->size;
       ret->size = size;
    } 
@@ -149,7 +170,6 @@ void *myMalloc(size_t size) {
 
       if (ret == NULL) {
          /* Problem with sbrk */
-
          errno = ENOMEM;
          return NULL;
       }
@@ -219,7 +239,6 @@ void myFree(void *ptr) {
       return;
    }
 
-   blockHeader *adjacentFreeBlock;
    blockHeader *blockToFree = findHeader(ptr);
 
    if (blockToFree != NULL) {
@@ -244,6 +263,7 @@ void *realloc(void *ptr, size_t size) {
       return myMalloc(size);
    }
 
+   return NULL;
 }
 
 int main(int argc, char *argv[], char *envp[])
@@ -285,7 +305,7 @@ int main(int argc, char *argv[], char *envp[])
              printf("%d : %p - %d \n", i, pointers[i], *(pointers[i]));
           }
 
-          printf("MALLOC RESPONSE ptr: %p val: %d\n", ptr, *ptr);
+          printf("MALLOC RESPONSE ptr: %lu val: %d\n", (unsigned long)ptr, *ptr);
 
    }
 
