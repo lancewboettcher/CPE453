@@ -173,7 +173,7 @@ void *myMalloc(size_t size) {
       printf("created new header at location %p, size %zu\n", newBlock, newBlock->size);
    }
 
-   //printMemoryList(head);
+   printMemoryList(head);
 
    return ret + sizeof(blockHeader);
 }
@@ -203,7 +203,7 @@ blockHeader *findHeader(void *ptr) {
       return NULL;
    }
 
-   while (ptr > ((void *)(iterator + iterator->size + sizeof(blockHeader)))) {
+   while (iterator != NULL && ptr > ((void *)(iterator + iterator->size + sizeof(blockHeader)))) {
       iterator = iterator->next;
    }
    
@@ -219,11 +219,19 @@ void myFree(void *ptr) {
       return;
    }
 
+   blockHeader *adjacentFreeBlock;
    blockHeader *blockToFree = findHeader(ptr);
 
    if (blockToFree != NULL) {
       printf("Freeing %p\n", blockToFree);
       blockToFree->isFree = TRUE;
+
+
+      if (blockToFree->next->isFree) {
+         /* adjacent free blocks */
+         
+         blockToFree->next = blockToFree->next->next;
+      }
    }
 }
 
