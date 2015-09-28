@@ -205,6 +205,13 @@ void *calloc(size_t nmemb, size_t size) {
 
    size_t newSize = nmemb * size;
    void *ret = myMalloc(newSize);
+
+   if (ret == NULL) {
+      /* Problem with sbrk */ 
+      errno = ENOMEM;
+      return NULL;
+   }
+
    memset(ret, 0, newSize);
   
 #ifdef DEBUG_MALLOC
@@ -248,13 +255,15 @@ void myFree(void *ptr) {
 
       if (blockToFree->next->isFree) {
          /* adjacent free blocks */
-         
+        
+         //Might be better to go through the whole list and check for adjacent
+
          blockToFree->next = blockToFree->next->next;
       }
    }
 }
 
-void *realloc(void *ptr, size_t size) {
+void *myRealloc(void *ptr, size_t size) {
 #ifdef DEBUG_MALLOC
    printf("Called my realloc\n");
 #endif
@@ -262,8 +271,39 @@ void *realloc(void *ptr, size_t size) {
    if (ptr == NULL) {
       return myMalloc(size);
    }
+   if (size == 0) {
+      myFree(ptr);
+      return NULL; //I dont know if this is right
+   }
 
-   return NULL;
+   blockHeader *blockToRealloc = findHeader(ptr);
+   void *newPtr; 
+
+   if (blockToRealloc->size >= size) {
+      /* Block is already big enough, dont do anything */ 
+      return blockToRealloc;
+   }
+
+   //check for adjacent free
+   
+
+   else {
+      /* Allocate totally new block, mark old as free */ 
+
+      newPtr = myMalloc(size);
+      if (newPtr == NULL) {
+         /* Problem with sbrk */ 
+         errno = ENOMEM;
+         return NULL;
+      }
+
+      //Make sure this is using the right size
+      memcpy(newPtr + sizeof(blockHeader), blockToRealloc + sizeof(blockHeader), blockToRealloc->size);
+
+      myFree(ptr);
+
+      return newPtr;
+   }
 }
 
 int main(int argc, char *argv[], char *envp[])
@@ -272,7 +312,7 @@ int main(int argc, char *argv[], char *envp[])
    int mychar;
    int *pointers[100];
    int index = 0;
-   int i, j;
+   int i, j, rSize, rc;
    char c;
    
    while(1)
@@ -280,14 +320,30 @@ int main(int argc, char *argv[], char *envp[])
           printf("Enter a character:\n");
           scanf(" %c %d", &c, &mychar);
 
-          if(c != 'f') {
+          if(c == 'm') {
             ptr = myMalloc(sizeof(int));
             *ptr = mychar;
             pointers[index] = ptr;
 
             index++;
           }
-          else {
+          else if(c == 'r') {
+            printf("Enter size and char to input\n");
+            scanf(" %d %d", &rSize, &rc);
+
+            for(j = 0; j <= index; j++) {
+               if(*(pointers[j]) == mychar) {
+                  printf("Calling realloc on %p : val: %d\n", pointers[j], *(pointers[j]));
+                  ptr = myRealloc(pointers[j], rSize);
+                 // *ptr = rc;
+                  pointers[index++] = ptr;
+
+                  break;
+               }
+            }
+
+          }   
+          else if(c == 'f') {
 
             for(j = 0; j <= index; j++) {
                if(*(pointers[j]) == mychar) {
