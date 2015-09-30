@@ -4,7 +4,6 @@
 #include <unistd.h>
 #include <errno.h>
 #include <math.h>
-#include <inttypes.h>
 
 #define DEFAULT_CHUNK_SIZE 65536
 #define MIN_BLOCK_SIZE 16
@@ -25,8 +24,8 @@ void printMemoryList(blockHeader *iterator) {
    int index = 0;
 
    while (iterator) {
-      snprintf(printBuffer, 100, "%d: %p size: %zu isFree: %d val: %d\n", 
-            index++, iterator, iterator->size, 
+      snprintf(printBuffer, 100, "%d: %lu size: %zu isFree: %d val: %d\n", 
+            index++, (unsigned long)iterator, iterator->size, 
             iterator->isFree, *(int *)((void *)iterator + sizeof(blockHeader)));
       fputs(printBuffer, stdout);
 
@@ -44,7 +43,7 @@ int modifySize(int size) {
 
 void *findHeadLocation(void *heapLoc) {
 
-   while ((uintptr_t)heapLoc % MIN_BLOCK_SIZE != 0) {
+   while ((unsigned long)heapLoc % MIN_BLOCK_SIZE != 0) {
       heapLoc++;
    }
 
@@ -79,7 +78,7 @@ blockHeader *allocateMemory(size_t size, blockHeader *prev,
       }
    }
    
-   newBlock = sbrk(size);
+   newBlock = sbrk(size + sizeof(blockHeader));
 
    if (newBlock == (void *) -1) {
       /* Error with sbrk */
@@ -115,7 +114,11 @@ blockHeader *getFreeBlock(size_t size) {
 
    blockHeader *iterator = head;
    blockHeader *prev = NULL;
-   
+/*
+   snprintf(printBuffer, 100, "%p isFree: %d size: %zu\n", iterator, 
+         iterator->isFree, iterator->size);
+   fputs(printBuffer, stdout);
+*/
    while (iterator != NULL && (!iterator->isFree || iterator->size < size)) {
       /* Looking for a free block big enough */
 
@@ -179,17 +182,11 @@ void *malloc(size_t size) {
          ret = allocateMemory(DEFAULT_CHUNK_SIZE, NULL, TRUE);
       }
       else {
-         ret = allocateMemory(modifySize(size + sizeof(blockHeader)),
-               NULL, TRUE);
+         ret = allocateMemory(size, NULL, TRUE);
       }
 
       if (ret == NULL) {
          /* Problem with sbrk */
-
-         snprintf(printBuffer, 100, 
-               "MALLOC - Problem with sbrk \n");
-         fputs(printBuffer, stdout);
-
          errno = ENOMEM;
          return NULL;
       }
@@ -205,11 +202,6 @@ void *malloc(size_t size) {
 
       if (ret == NULL) {
          /* Problem with sbrk */
-         
-         snprintf(printBuffer, 100, 
-               "MALLOC - Problem with sbrk \n");
-         fputs(printBuffer, stdout);
-
          errno = ENOMEM;
          return NULL;
       }
@@ -223,9 +215,7 @@ void *malloc(size_t size) {
    leftoverSize = oldSize - size;
    if (leftoverSize > MIN_BLOCK_SIZE) {
       /* Break up block */
-
-      //TODO: Might be able to check if real size is smaller
-      newBlock = (void *)ret + size + sizeof(blockHeader);
+      newBlock = ret + size + sizeof(blockHeader);
 
       newBlock->next = ret->next;
       ret->next = newBlock;
@@ -234,8 +224,8 @@ void *malloc(size_t size) {
 
       if (getenv("DEBUG_MALLOC")) {
          snprintf(printBuffer, 100, 
-               "created new header at location %p, size %zu\n", 
-               newBlock, newBlock->size);
+               "created new header at location %lu, size %zu\n", 
+               (unsigned long)newBlock, newBlock->size);
          fputs(printBuffer, stdout);
       }
    }
