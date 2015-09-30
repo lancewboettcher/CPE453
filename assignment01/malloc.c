@@ -8,6 +8,7 @@
 #define MIN_BLOCK_SIZE 16
 #define TRUE 1
 #define FALSE 0
+#define PRINT_BUFFER_SIZE 100
 
 typedef struct blockHeader {
    size_t size;
@@ -16,14 +17,16 @@ typedef struct blockHeader {
 } blockHeader;
 
 void *head = NULL;
+char printBuffer[PRINT_BUFFER_SIZE];
 
 void printMemoryList(blockHeader *iterator) {
    //blockHeader *iterator = head;
    int index = 0;
 
    while (iterator) {
-      printf("%d: %p size: %zu isFree: %d val: %d\n", index++, iterator, iterator->size, 
+      snprintf(printBuffer, 100, "%d: %p size: %zu isFree: %d val: %d\n", index++, iterator, iterator->size, 
             iterator->isFree, *(int *)(iterator));
+      fputs(printBuffer, stdout);
 
       iterator = iterator->next;
    }
@@ -48,7 +51,8 @@ void *findHeadLocation(void *heapLoc) {
 
 blockHeader *allocateMemory(size_t size, blockHeader *prev, int isFirstAllocation) {
 
-   printf("Allocating new memory\n");
+   snprintf(printBuffer, 100, "Allocating new memory\n");
+   fputs(printBuffer, stdout);
 
    blockHeader *newBlock;
 
@@ -87,19 +91,22 @@ blockHeader *allocateMemory(size_t size, blockHeader *prev, int isFirstAllocatio
    newBlock->next = NULL;
    newBlock->isFree = FALSE;
 
-   printf("allocated new memory at location %p with size %zu\n", newBlock, size);
+   snprintf(printBuffer, 100, "allocated new memory at location %p with size %zu\n", newBlock, size);
+   fputs(printBuffer, stdout);
 
    return newBlock;
 }
 
 blockHeader *getFreeBlock(size_t size) {
 
-   printf("Getting free Block\n");
+   snprintf(printBuffer, 100, "Getting free Block\n");
+   fputs(printBuffer, stdout);
 
    blockHeader *iterator = head;
    blockHeader *prev = NULL;
 
-   printf("%p isFree: %d size: %zu\n", iterator, iterator->isFree, iterator->size);
+   snprintf(printBuffer, 100, "%p isFree: %d size: %zu\n", iterator, iterator->isFree, iterator->size);
+   fputs(printBuffer, stdout);
 
    while (iterator != NULL && (!iterator->isFree || iterator->size < size)) {
       /* Looking for a free block big enough */
@@ -111,8 +118,9 @@ blockHeader *getFreeBlock(size_t size) {
    if (iterator == NULL) {
       /* Nothing big enough, allocate a new block */
 
-      printf("Get free block did not find a big enough block\n");
-      
+      snprintf(printBuffer, 100, "Get free block did not find a big enough block\n");
+      fputs(printBuffer, stdout);
+
       if (size > DEFAULT_CHUNK_SIZE) {
          iterator = allocateMemory(size, prev, FALSE);
       }
@@ -121,14 +129,16 @@ blockHeader *getFreeBlock(size_t size) {
       }
    }
 
-   printf("getFreeBlock returning location %p with size %zu\n", iterator, size);
+   snprintf(printBuffer, 100, "getFreeBlock returning location %p with size %zu\n", iterator, size);
+   fputs(printBuffer, stdout);
 
    return iterator;
 }
 
-void *myMalloc(size_t size) {
+void *malloc(size_t size) {
 #ifdef DEBUG_MALLOC
-   printf("Called my malloc\n");
+   snprintf(printBuffer, 100, "Called my malloc\n");
+   fputs(printBuffer, stdout);
 #endif
 
    blockHeader *ret = NULL;
@@ -144,7 +154,8 @@ void *myMalloc(size_t size) {
    if (head == NULL) {
       /* First time calling malloc */ 
 
-      printf("Head is null. First time calling malloc? \n");
+      snprintf(printBuffer, 100, "Head is null. First time calling malloc? \n");
+      fputs(printBuffer, stdout);
 
       if (size <= DEFAULT_CHUNK_SIZE) {
          ret = allocateMemory(DEFAULT_CHUNK_SIZE, NULL, TRUE);
@@ -190,17 +201,19 @@ void *myMalloc(size_t size) {
       newBlock->size = leftoverSize - sizeof(blockHeader);
       newBlock->isFree = TRUE;
 
-      printf("created new header at location %p, size %zu\n", newBlock, newBlock->size);
+      snprintf(printBuffer, 100, "created new header at location %p, size %zu\n", newBlock, newBlock->size);
+      fputs(printBuffer, stdout);
    }
 
-   printMemoryList(head);
+ //  printMemoryList(head);
 
    return ret + sizeof(blockHeader);
 }
 
 void *calloc(size_t nmemb, size_t size) {
 #ifdef DEBUG_MALLOC
-   printf("Called my calloc\n");
+   snprintf(printBuffer, 100, "Called my calloc\n");
+   fputs(printBuffer, stdout);
 #endif
 
    size_t newSize = nmemb * size;
@@ -215,7 +228,8 @@ void *calloc(size_t nmemb, size_t size) {
    memset(ret, 0, newSize);
   
 #ifdef DEBUG_MALLOC
-   printf("MALLOC: calloc(%d,%d) => (ptr=%p, size=%d)\n", nmemb, size, ret, newSize);
+   snprintf(printBuffer, 100, "MALLOC: calloc(%d,%d) => (ptr=%p, size=%d)\n", nmemb, size, ret, newSize);
+   fputs(printBuffer, stdout);
 #endif
 
    return ret; 
@@ -237,9 +251,10 @@ blockHeader *findHeader(void *ptr) {
    return iterator;
 }   
 
-void myFree(void *ptr) {
+void free(void *ptr) {
 #ifdef DEBUG_MALLOC
-   printf("Called my free\n");
+   snprintf(printBuffer, 100, "Called my free\n");
+   fputs(printBuffer, stdout);
 #endif
 
    if (ptr == NULL) {
@@ -249,7 +264,8 @@ void myFree(void *ptr) {
    blockHeader *blockToFree = findHeader(ptr);
 
    if (blockToFree != NULL) {
-      printf("Freeing %p\n", blockToFree);
+      snprintf(printBuffer, 100, "Freeing %p\n", blockToFree);
+      fputs(printBuffer, stdout);
       blockToFree->isFree = TRUE;
 
 
@@ -257,15 +273,17 @@ void myFree(void *ptr) {
          /* adjacent free blocks */
         
          //Might be better to go through the whole list and check for adjacent
-
+         blockToFree->size = blockToFree->size + blockToFree->next->size;
          blockToFree->next = blockToFree->next->next;
+
       }
    }
 }
 
-void *myRealloc(void *ptr, size_t size) {
+void *realloc(void *ptr, size_t size) {
 #ifdef DEBUG_MALLOC
-   printf("Called my realloc\n");
+   snprintf(printBuffer, 100, "Called my realloc\n");
+   fputs(printBuffer, stdout);
 #endif
 
    if (ptr == NULL) {
@@ -284,8 +302,15 @@ void *myRealloc(void *ptr, size_t size) {
       return blockToRealloc;
    }
 
-   //check for adjacent free
-   
+   /* Check for adjacent free block */
+   else if (blockToRealloc->next != NULL && blockToRealloc->next->isFree) {
+      blockToRealloc->size = blockToRealloc->size + blockToRealloc->next->size;
+      blockToRealloc->next = blockToRealloc->next->next;
+
+      //TODO: Probably should break this up
+
+      return blockToRealloc + sizeof(blockHeader);
+   }
 
    else {
       /* Allocate totally new block, mark old as free */ 
@@ -297,15 +322,15 @@ void *myRealloc(void *ptr, size_t size) {
          return NULL;
       }
 
-      //Make sure this is using the right size
-      memcpy(newPtr + sizeof(blockHeader), blockToRealloc + sizeof(blockHeader), blockToRealloc->size);
+      //TODO: Make sure this is using the right size
+      memcpy(newPtr, blockToRealloc + sizeof(blockHeader), blockToRealloc->size);
 
       myFree(ptr);
 
       return newPtr;
    }
 }
-
+/*
 int main(int argc, char *argv[], char *envp[])
 {
    int *ptr;
@@ -317,7 +342,8 @@ int main(int argc, char *argv[], char *envp[])
    
    while(1)
    {
-          printf("Enter a character:\n");
+          snprintf(printBuffer, 100, "Enter a character:\n");
+          fputs(printBuffer, stdout);
           scanf(" %c %d", &c, &mychar);
 
           if(c == 'm') {
@@ -328,12 +354,15 @@ int main(int argc, char *argv[], char *envp[])
             index++;
           }
           else if(c == 'r') {
-            printf("Enter size and char to input\n");
+            snprintf(printBuffer, 100, "Enter size and char to input\n");
+            fputs(printBuffer, stdout);
+
             scanf(" %d %d", &rSize, &rc);
 
             for(j = 0; j <= index; j++) {
                if(*(pointers[j]) == mychar) {
-                  printf("Calling realloc on %p : val: %d\n", pointers[j], *(pointers[j]));
+                  snprintf(printBuffer, 100, "Calling realloc on %p : val: %d\n", pointers[j], *(pointers[j]));
+                  fputs(printBuffer, stdout);
                   ptr = myRealloc(pointers[j], rSize);
                  // *ptr = rc;
                   pointers[index++] = ptr;
@@ -347,7 +376,8 @@ int main(int argc, char *argv[], char *envp[])
 
             for(j = 0; j <= index; j++) {
                if(*(pointers[j]) == mychar) {
-                  printf("Calling free on %p : val: %d\n", pointers[j], *(pointers[j]));
+                  snprintf(printBuffer, 100, "Calling free on %p : val: %d\n", pointers[j], *(pointers[j]));
+                  fputs(printBuffer, stdout);
                   myFree(pointers[j]);
 
                   break;
@@ -356,16 +386,17 @@ int main(int argc, char *argv[], char *envp[])
          
           }
 
-          printf("\nPointers:\n");
+          snprintf(printBuffer, 100, "\nPointers:\n");
           for(i = 0; i < index; i++) {
-             printf("%d : %p - %d \n", i, pointers[i], *(pointers[i]));
+             snprintf(printBuffer, 100, "%d : %lu - %d \n", i, (unsigned long)pointers[i], *(pointers[i]));
+             fputs(printBuffer, stdout);
           }
 
-          printf("MALLOC RESPONSE ptr: %lu val: %d\n", (unsigned long)ptr, *ptr);
-
+          snprintf(printBuffer, 100, "MALLOC RESPONSE ptr: %lu val: %d\n", (unsigned long)ptr, *ptr);
+          fputs(printBuffer, stdout);
    }
 
    return 0;
 }
-
+*/
 
