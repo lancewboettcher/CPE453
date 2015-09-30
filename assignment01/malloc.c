@@ -1,4 +1,5 @@
-#include <stdio.h> 
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
@@ -20,12 +21,12 @@ void *head = NULL;
 char printBuffer[PRINT_BUFFER_SIZE];
 
 void printMemoryList(blockHeader *iterator) {
-   //blockHeader *iterator = head;
    int index = 0;
 
    while (iterator) {
-      snprintf(printBuffer, 100, "%d: %p size: %zu isFree: %d val: %d\n", index++, iterator, iterator->size, 
-            iterator->isFree, *(int *)(iterator));
+      snprintf(printBuffer, 100, "%d: %lu size: %zu isFree: %d val: %d\n", 
+            index++, (unsigned long)iterator, iterator->size, 
+            iterator->isFree, *(int *)((void *)iterator + sizeof(blockHeader)));
       fputs(printBuffer, stdout);
 
       iterator = iterator->next;
@@ -49,10 +50,13 @@ void *findHeadLocation(void *heapLoc) {
    return heapLoc;
 }
 
-blockHeader *allocateMemory(size_t size, blockHeader *prev, int isFirstAllocation) {
+blockHeader *allocateMemory(size_t size, blockHeader *prev, 
+      int isFirstAllocation) {
 
-   snprintf(printBuffer, 100, "Allocating new memory\n");
-   fputs(printBuffer, stdout);
+   if (getenv("DEBUG_MALLOC")) {
+      snprintf(printBuffer, 100, "Allocating new memory\n");
+      fputs(printBuffer, stdout);
+   }
 
    blockHeader *newBlock;
 
@@ -91,23 +95,28 @@ blockHeader *allocateMemory(size_t size, blockHeader *prev, int isFirstAllocatio
    newBlock->next = NULL;
    newBlock->isFree = FALSE;
 
-   snprintf(printBuffer, 100, "allocated new memory at location %p with size %zu\n", newBlock, size);
-   fputs(printBuffer, stdout);
+   if (getenv("DEBUG_MALLOC")) {
+      snprintf(printBuffer, 100, "allocated new memory at location %p with size %zu\n", newBlock, size);
+      fputs(printBuffer, stdout);
+   }
 
    return newBlock;
 }
 
 blockHeader *getFreeBlock(size_t size) {
 
-   snprintf(printBuffer, 100, "Getting free Block\n");
-   fputs(printBuffer, stdout);
+   if (getenv("DEBUG_MALLOC")) {
+      snprintf(printBuffer, 100, "Getting free Block\n");
+      fputs(printBuffer, stdout);
+   }
 
    blockHeader *iterator = head;
    blockHeader *prev = NULL;
-
-   snprintf(printBuffer, 100, "%p isFree: %d size: %zu\n", iterator, iterator->isFree, iterator->size);
+/*
+   snprintf(printBuffer, 100, "%p isFree: %d size: %zu\n", iterator, 
+         iterator->isFree, iterator->size);
    fputs(printBuffer, stdout);
-
+*/
    while (iterator != NULL && (!iterator->isFree || iterator->size < size)) {
       /* Looking for a free block big enough */
 
@@ -118,8 +127,10 @@ blockHeader *getFreeBlock(size_t size) {
    if (iterator == NULL) {
       /* Nothing big enough, allocate a new block */
 
-      snprintf(printBuffer, 100, "Get free block did not find a big enough block\n");
-      fputs(printBuffer, stdout);
+      if (getenv("DEBUG_MALLOC")) {
+         snprintf(printBuffer, 100, "Get free block did not find a big enough block\n");
+         fputs(printBuffer, stdout);
+      }
 
       if (size > DEFAULT_CHUNK_SIZE) {
          iterator = allocateMemory(size, prev, FALSE);
@@ -129,33 +140,37 @@ blockHeader *getFreeBlock(size_t size) {
       }
    }
 
-   snprintf(printBuffer, 100, "getFreeBlock returning location %p with size %zu\n", iterator, size);
-   fputs(printBuffer, stdout);
+   if (getenv("DEBUG_MALLOC")) {
+      snprintf(printBuffer, 100, "getFreeBlock returning location %p with size %zu\n", iterator, size);
+      fputs(printBuffer, stdout);
+   }
 
    return iterator;
 }
 
 void *malloc(size_t size) {
-#ifdef DEBUG_MALLOC
-   snprintf(printBuffer, 100, "Called my malloc\n");
-   fputs(printBuffer, stdout);
-#endif
-
-   blockHeader *ret = NULL;
-   blockHeader *newBlock;
-   size_t leftoverSize, oldSize;
+   if (getenv("DEBUG_MALLOC")) {
+      snprintf(printBuffer, 100, "Called my malloc\n");
+      fputs(printBuffer, stdout);
+   }
 
    if (size <= 0 ) {
       return NULL;
    }
 
+   blockHeader *ret = NULL;
+   blockHeader *newBlock;
+   size_t leftoverSize, oldSize;
+
    size = modifySize(size);
 
    if (head == NULL) {
       /* First time calling malloc */ 
-
-      snprintf(printBuffer, 100, "Head is null. First time calling malloc? \n");
-      fputs(printBuffer, stdout);
+       
+      if (getenv("DEBUG_MALLOC")) {
+         snprintf(printBuffer, 100, "Head is null. First time calling malloc? \n");
+         fputs(printBuffer, stdout);
+      }
 
       if (size <= DEFAULT_CHUNK_SIZE) {
          ret = allocateMemory(DEFAULT_CHUNK_SIZE, NULL, TRUE);
@@ -201,11 +216,14 @@ void *malloc(size_t size) {
       newBlock->size = leftoverSize - sizeof(blockHeader);
       newBlock->isFree = TRUE;
 
-      snprintf(printBuffer, 100, "created new header at location %p, size %zu\n", newBlock, newBlock->size);
-      fputs(printBuffer, stdout);
+      if (getenv("DEBUG_MALLOC")) {
+         snprintf(printBuffer, 100, "created new header at location %lu, size %zu\n", 
+               (unsigned long)newBlock, newBlock->size);
+         fputs(printBuffer, stdout);
+      }
    }
 
- //  printMemoryList(head);
+   printMemoryList(head);
 
    return ret + sizeof(blockHeader);
 }
@@ -217,7 +235,7 @@ void *calloc(size_t nmemb, size_t size) {
 #endif
 
    size_t newSize = nmemb * size;
-   void *ret = myMalloc(newSize);
+   void *ret = malloc(newSize);
 
    if (ret == NULL) {
       /* Problem with sbrk */ 
@@ -228,7 +246,8 @@ void *calloc(size_t nmemb, size_t size) {
    memset(ret, 0, newSize);
   
 #ifdef DEBUG_MALLOC
-   snprintf(printBuffer, 100, "MALLOC: calloc(%d,%d) => (ptr=%p, size=%d)\n", nmemb, size, ret, newSize);
+   snprintf(printBuffer, 100, "MALLOC: calloc(%d,%d) => (ptr=%p, size=%d)\n", 
+         nmemb, size, ret, newSize);
    fputs(printBuffer, stdout);
 #endif
 
@@ -244,7 +263,8 @@ blockHeader *findHeader(void *ptr) {
       return NULL;
    }
 
-   while (iterator != NULL && ptr > ((void *)(iterator + iterator->size + sizeof(blockHeader)))) {
+   while (iterator != NULL && ptr > ((void *)(iterator + iterator->size + 
+               sizeof(blockHeader)))) {
       iterator = iterator->next;
    }
    
@@ -252,10 +272,10 @@ blockHeader *findHeader(void *ptr) {
 }   
 
 void free(void *ptr) {
-#ifdef DEBUG_MALLOC
-   snprintf(printBuffer, 100, "Called my free\n");
-   fputs(printBuffer, stdout);
-#endif
+   if (getenv("DEBUG_MALLOC")) {
+      snprintf(printBuffer, 100, "Called my free\n");
+      fputs(printBuffer, stdout);
+   }
 
    if (ptr == NULL) {
       return;
@@ -264,8 +284,12 @@ void free(void *ptr) {
    blockHeader *blockToFree = findHeader(ptr);
 
    if (blockToFree != NULL) {
-      snprintf(printBuffer, 100, "Freeing %p\n", blockToFree);
-      fputs(printBuffer, stdout);
+      
+      if (getenv("DEBUG_MALLOC")) {
+         snprintf(printBuffer, 100, "Freeing %p\n", blockToFree);
+         fputs(printBuffer, stdout);
+      }
+
       blockToFree->isFree = TRUE;
 
 
@@ -281,16 +305,16 @@ void free(void *ptr) {
 }
 
 void *realloc(void *ptr, size_t size) {
-#ifdef DEBUG_MALLOC
-   snprintf(printBuffer, 100, "Called my realloc\n");
-   fputs(printBuffer, stdout);
-#endif
+   if (getenv("DEBUG_MALLOC")) {
+      snprintf(printBuffer, 100, "Called my realloc\n");
+      fputs(printBuffer, stdout);
+   }
 
    if (ptr == NULL) {
-      return myMalloc(size);
+      return malloc(size);
    }
    if (size == 0) {
-      myFree(ptr);
+      free(ptr);
       return NULL; //I dont know if this is right
    }
 
@@ -315,7 +339,7 @@ void *realloc(void *ptr, size_t size) {
    else {
       /* Allocate totally new block, mark old as free */ 
 
-      newPtr = myMalloc(size);
+      newPtr = malloc(size);
       if (newPtr == NULL) {
          /* Problem with sbrk */ 
          errno = ENOMEM;
@@ -323,9 +347,10 @@ void *realloc(void *ptr, size_t size) {
       }
 
       //TODO: Make sure this is using the right size
-      memcpy(newPtr, blockToRealloc + sizeof(blockHeader), blockToRealloc->size);
+      memcpy(newPtr, blockToRealloc + sizeof(blockHeader), 
+            blockToRealloc->size);
 
-      myFree(ptr);
+      free(ptr);
 
       return newPtr;
    }
@@ -361,7 +386,8 @@ int main(int argc, char *argv[], char *envp[])
 
             for(j = 0; j <= index; j++) {
                if(*(pointers[j]) == mychar) {
-                  snprintf(printBuffer, 100, "Calling realloc on %p : val: %d\n", pointers[j], *(pointers[j]));
+                  snprintf(printBuffer, 100, "Calling realloc on %p : 
+                     val: %d\n", pointers[j], *(pointers[j]));
                   fputs(printBuffer, stdout);
                   ptr = myRealloc(pointers[j], rSize);
                  // *ptr = rc;
@@ -376,7 +402,8 @@ int main(int argc, char *argv[], char *envp[])
 
             for(j = 0; j <= index; j++) {
                if(*(pointers[j]) == mychar) {
-                  snprintf(printBuffer, 100, "Calling free on %p : val: %d\n", pointers[j], *(pointers[j]));
+                  snprintf(printBuffer, 100, "Calling free on %p : val: %d\n", 
+                     pointers[j], *(pointers[j]));
                   fputs(printBuffer, stdout);
                   myFree(pointers[j]);
 
@@ -388,11 +415,13 @@ int main(int argc, char *argv[], char *envp[])
 
           snprintf(printBuffer, 100, "\nPointers:\n");
           for(i = 0; i < index; i++) {
-             snprintf(printBuffer, 100, "%d : %lu - %d \n", i, (unsigned long)pointers[i], *(pointers[i]));
+             snprintf(printBuffer, 100, "%d : %lu - %d \n", i, 
+               (unsigned long)pointers[i], *(pointers[i]));
              fputs(printBuffer, stdout);
           }
 
-          snprintf(printBuffer, 100, "MALLOC RESPONSE ptr: %lu val: %d\n", (unsigned long)ptr, *ptr);
+          snprintf(printBuffer, 100, "MALLOC RESPONSE ptr: %lu val: %d\n", 
+            (unsigned long)ptr, *ptr);
           fputs(printBuffer, stdout);
    }
 
