@@ -5,7 +5,7 @@
 int main(int argc, char *argv[]) {
    char *s;
    char printBuffer[100];
-   
+  /* 
    snprintf(printBuffer, 100, "Starting tryme\n");
    fputs(printBuffer, stdout);
 
@@ -32,6 +32,37 @@ int main(int argc, char *argv[]) {
    snprintf(printBuffer, 100, "Allocating 2000\n");
    fputs(printBuffer, stdout);
    malloc(2000);
-       
+
+   int i;
+   void *ptr;
+   for(i = 0; i < 100000; i++) {
+      snprintf(printBuffer, 100, "Allocating %d\n", i);
+      fputs(printBuffer, stdout);
+
+      ptr = malloc(i);
+      free(ptr);
+   }
+   */
+
+   
+   int i;
+   int *ptr;
+
+
+   for(i = 0; i < 8192; i++) {
+      snprintf(printBuffer, 100, "Allocating %d\n", i);
+      fputs(printBuffer, stdout);
+
+      ptr = malloc(i);
+
+      if(i>0)  {
+       //  *ptr = 69;
+         memset(ptr, 69, i);
+      }
+
+
+   //   free(ptr);
+   }
+
    return 0;
 }

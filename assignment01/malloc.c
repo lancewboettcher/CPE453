@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <math.h>
 #include <inttypes.h>
+#include <assert.h>
 
 #define DEFAULT_CHUNK_SIZE 65536
 #define MIN_BLOCK_SIZE 16
@@ -16,17 +17,21 @@ typedef struct blockHeader {
    size_t size;
    int isFree;
    struct blockHeader *next;
+   int dummyToMake16;
 } blockHeader;
 
 void *head = NULL;
+void *topOfHeap = NULL;
 char printBuffer[PRINT_BUFFER_SIZE];
+int debug = 0;
 
 void printMemoryList(blockHeader *iterator) {
    int index = 0;
 
    while (iterator) {
-      snprintf(printBuffer, 100, "%d: %p size: %zu isFree: %d val: %d\n", 
-            index++, iterator, iterator->size, 
+      snprintf(printBuffer, 100, 
+            "%d: 0x%" PRIXPTR " size: %zu isFree: %d val: %d\n", 
+            index++, (uintptr_t)iterator, iterator->size, 
             iterator->isFree, *(int *)((void *)iterator + sizeof(blockHeader)));
       fputs(printBuffer, stdout);
 
@@ -34,7 +39,7 @@ void printMemoryList(blockHeader *iterator) {
    }
 }
 
-int modifySize(int size) {
+size_t modifySize(size_t size) {
    while (size % MIN_BLOCK_SIZE != 0) {
       size++;
    }
@@ -54,8 +59,9 @@ void *findHeadLocation(void *heapLoc) {
 blockHeader *allocateMemory(size_t size, blockHeader *prev, 
       int isFirstAllocation) {
 
-   if (getenv("DEBUG_MALLOC")) {
-      snprintf(printBuffer, 100, "Allocating new memory\n");
+   //if (getenv("DEBUG_MALLOC")) {
+   if(debug) {
+      snprintf(printBuffer, 100, "*****Allocating new memory******\n");
       fputs(printBuffer, stdout);
    }
 
@@ -80,6 +86,8 @@ blockHeader *allocateMemory(size_t size, blockHeader *prev,
    }
    
    newBlock = sbrk(size);
+   
+   topOfHeap=sbrk(0);
 
    if (newBlock == (void *) -1) {
       /* Error with sbrk */
@@ -98,8 +106,8 @@ blockHeader *allocateMemory(size_t size, blockHeader *prev,
 
    if (getenv("DEBUG_MALLOC")) {
       snprintf(printBuffer, 100, 
-            "allocated new memory at location %p with size %zu\n",
-            newBlock, size);
+            "allocated new memory at location 0x%" PRIXPTR "with size %zu\n",
+            (uintptr_t)newBlock, newBlock->size);
       fputs(printBuffer, stdout);
    }
 
@@ -108,8 +116,9 @@ blockHeader *allocateMemory(size_t size, blockHeader *prev,
 
 blockHeader *getFreeBlock(size_t size) {
 
-   if (getenv("DEBUG_MALLOC")) {
-      snprintf(printBuffer, 100, "Getting free Block\n");
+ //  if (getenv("DEBUG_MALLOC")) {
+   if(debug) {
+      snprintf(printBuffer, 100, "Getting free Block of size %zu\n", size);
       fputs(printBuffer, stdout);
    }
 
@@ -140,10 +149,11 @@ blockHeader *getFreeBlock(size_t size) {
       }
    }
 
-   if (getenv("DEBUG_MALLOC")) {
+ //  if (getenv("DEBUG_MALLOC")) {
+   if(debug) {
       snprintf(printBuffer, 100, 
-            "getFreeBlock returning location %p with size %zu\n", 
-            iterator, size);
+            "getFreeBlock returning location 0x%" PRIXPTR " with size %zu\n", 
+            (uintptr_t)iterator, iterator->size);
       fputs(printBuffer, stdout);
    }
 
@@ -164,7 +174,7 @@ void *malloc(size_t size) {
    blockHeader *newBlock;
    size_t leftoverSize, oldSize;
 
-   size = modifySize(size);
+   size = modifySize(size + sizeof(blockHeader));
 
    if (head == NULL) {
       /* First time calling malloc */ 
@@ -179,8 +189,7 @@ void *malloc(size_t size) {
          ret = allocateMemory(DEFAULT_CHUNK_SIZE, NULL, TRUE);
       }
       else {
-         ret = allocateMemory(modifySize(size + sizeof(blockHeader)),
-               NULL, TRUE);
+         ret = allocateMemory(size, NULL, TRUE);
       }
 
       if (ret == NULL) {
@@ -193,9 +202,9 @@ void *malloc(size_t size) {
          errno = ENOMEM;
          return NULL;
       }
-
+      
       oldSize = ret->size;
-      ret->size = size;
+     // ret->size = size;
    } 
    
    else {   
@@ -205,7 +214,7 @@ void *malloc(size_t size) {
 
       if (ret == NULL) {
          /* Problem with sbrk */
-         
+      
          snprintf(printBuffer, 100, 
                "MALLOC - Problem with sbrk \n");
          fputs(printBuffer, stdout);
@@ -216,42 +225,59 @@ void *malloc(size_t size) {
       else {
          oldSize = ret->size;
          ret->isFree = 0;
-         ret->size = size;
+      
+      //   ret->size = size;
       }
    }
 
    leftoverSize = oldSize - size;
-   if (leftoverSize > MIN_BLOCK_SIZE) {
+   
+   if(debug) {
+      snprintf(printBuffer, 100, "Leftover Size:%zu Old Size: %zu Size: %zu\n", 
+            leftoverSize, oldSize, size);
+      fputs(printBuffer, stdout);
+   }
+
+   if (leftoverSize > (MIN_BLOCK_SIZE + sizeof(blockHeader))) {
       /* Break up block */
 
+      ret->size = size;
+
       //TODO: Might be able to check if real size is smaller
-      newBlock = (void *)ret + size + sizeof(blockHeader);
+      newBlock = (void *)ret + size;
 
       newBlock->next = ret->next;
       ret->next = newBlock;
-      newBlock->size = leftoverSize - sizeof(blockHeader);
+      newBlock->size = leftoverSize;
       newBlock->isFree = TRUE;
 
-      if (getenv("DEBUG_MALLOC")) {
+  //    if (getenv("DEBUG_MALLOC")) {
+ /*     if(debug) {
          snprintf(printBuffer, 100, 
-               "created new header at location %p, size %zu\n", 
-               newBlock, newBlock->size);
+               "***Top of heap is 0x%" PRIXPTR " created new 
+               header at location 0x%" PRIXPTR ", size %zu\n",
+               (uintptr_t)topOfHeap, (uintptr_t)newBlock, newBlock->size);
          fputs(printBuffer, stdout);
-      }
+      }*/
    }
 
-   if (getenv("DEBUG_MALLOC")) {
+ //  if (getenv("DEBUG_MALLOC")) {
+   if(debug) {  
       printMemoryList(head);
    }
 
-   return ret + sizeof(blockHeader);
+   void *pointerToBlock = (void *)ret + sizeof(blockHeader);
+   assert((uintptr_t)pointerToBlock % 16 == 0);
+   return pointerToBlock;
 }
 
 void *calloc(size_t nmemb, size_t size) {
-#ifdef DEBUG_MALLOC
-   snprintf(printBuffer, 100, "Called my calloc\n");
-   fputs(printBuffer, stdout);
-#endif
+
+
+   if (getenv("DEBUG_MALLOC")) {
+      snprintf(printBuffer, 100, "Called my calloc\n");
+      fputs(printBuffer, stdout);
+   }
 
    size_t newSize = nmemb * size;
    void *ret = malloc(newSize);
@@ -264,11 +290,12 @@ void *calloc(size_t nmemb, size_t size) {
 
    memset(ret, 0, newSize);
   
-#ifdef DEBUG_MALLOC
-   snprintf(printBuffer, 100, "MALLOC: calloc(%d,%d) => (ptr=%p, size=%d)\n", 
-         nmemb, size, ret, newSize);
-   fputs(printBuffer, stdout);
-#endif
+   if (getenv("DEBUG_MALLOC")) {
+      snprintf(printBuffer, 100, 
+            "MALLOC: calloc(%zu,%zu) => (ptr=0x%" PRIXPTR ", size=%zu)\n", 
+            nmemb, size, (uintptr_t)ret, newSize);
+      fputs(printBuffer, stdout);
+   }
 
    return ret; 
 }
@@ -305,7 +332,8 @@ void free(void *ptr) {
    if (blockToFree != NULL) {
       
       if (getenv("DEBUG_MALLOC")) {
-         snprintf(printBuffer, 100, "Freeing %p\n", blockToFree);
+         snprintf(printBuffer, 100, "Freeing 0x%" PRIXPTR "\n", 
+               (uintptr_t)blockToFree);
          fputs(printBuffer, stdout);
       }
 
