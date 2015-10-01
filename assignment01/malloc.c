@@ -369,22 +369,45 @@ void *realloc(void *ptr, size_t size) {
    void *newPtr; 
 
    if (blockToRealloc->size >= size) {
-      /* Block is already big enough, dont do anything */ 
-      return blockToRealloc;
+      /* Block is already big enough, dont do anything */
+
+      if (debug) {
+         snprintf(printBuffer, 100, "Block big enough, no moving\n");
+         fputs(printBuffer, stdout);
+      }
+
+     // memset(blockToRealloc + blockToRealloc->size, 0, 
+     //       blockToRealloc->size - sizeof(blockHeader) - size);
+
+      return (void *)blockToRealloc + sizeof(blockHeader);
    }
 
    /* Check for adjacent free block */
-   else if (blockToRealloc->next != NULL && blockToRealloc->next->isFree) {
+   else if (blockToRealloc->next != NULL && blockToRealloc->next->isFree &&
+         ((blockToRealloc->next->size + blockToRealloc->size - 
+           sizeof(blockHeader)) >= size)) {
+
+      if (debug) {
+         snprintf(printBuffer, 100, "Adjacent block free and big enough \n");
+         fputs(printBuffer, stdout);
+      }
+
+
       blockToRealloc->size = blockToRealloc->size + blockToRealloc->next->size;
       blockToRealloc->next = blockToRealloc->next->next;
 
       //TODO: Probably should break this up
 
-      return blockToRealloc + sizeof(blockHeader);
+      return (void *)blockToRealloc + sizeof(blockHeader);
    }
 
    else {
       /* Allocate totally new block, mark old as free */ 
+
+      if (debug) {
+         snprintf(printBuffer, 100, "Mallocing new block \n");
+         fputs(printBuffer, stdout);
+      }
 
       newPtr = malloc(size);
       if (newPtr == NULL) {
@@ -393,9 +416,8 @@ void *realloc(void *ptr, size_t size) {
          return NULL;
       }
 
-      //TODO: Make sure this is using the right size
       memcpy(newPtr, blockToRealloc + sizeof(blockHeader), 
-            blockToRealloc->size);
+            blockToRealloc->size - sizeof(blockHeader));
 
       free(ptr);
 
