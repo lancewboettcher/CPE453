@@ -268,6 +268,14 @@ void *malloc(size_t size) {
 
    void *pointerToBlock = (void *)ret + sizeof(blockHeader);
    assert((uintptr_t)pointerToBlock % 16 == 0);
+
+   if(debug) {  
+      snprintf(printBuffer, 100, 
+            "Malloc Returning: 0x%" PRIXPTR " Header: 0x%" PRIXPTR "\n", 
+            (uintptr_t)pointerToBlock, (uintptr_t)ret);
+      fputs(printBuffer, stdout);
+   }
+
    return pointerToBlock;
 }
 
@@ -301,6 +309,11 @@ void *calloc(size_t nmemb, size_t size) {
 }
 
 blockHeader *findHeader(void *ptr) {
+   if (debug) {
+      snprintf(printBuffer, 100, "Find header called with 0x%" PRIXPTR "\n", 
+            (uintptr_t)ptr);
+      fputs(printBuffer, stdout);
+   }
 
    blockHeader *iterator = head;
 
@@ -309,9 +322,15 @@ blockHeader *findHeader(void *ptr) {
       return NULL;
    }
 
-   while (iterator != NULL && ptr > ((void *)(iterator + iterator->size + 
-               sizeof(blockHeader)))) {
+   while (iterator != NULL && (uintptr_t)ptr >= 
+         (uintptr_t)((void *)iterator + iterator->size + sizeof(blockHeader))) {
       iterator = iterator->next;
+   }
+
+   if (debug) {
+      snprintf(printBuffer, 100, 
+            "Find header returning 0x%" PRIXPTR "\n", (uintptr_t)iterator);
+      fputs(printBuffer, stdout);
    }
    
    return iterator;
@@ -368,7 +387,7 @@ void *realloc(void *ptr, size_t size) {
    blockHeader *blockToRealloc = findHeader(ptr);
    void *newPtr; 
 
-   if (blockToRealloc->size >= size) {
+   if (blockToRealloc->size >= (size + sizeof(blockHeader))) {
       /* Block is already big enough, dont do anything */
 
       if (debug) {
@@ -376,14 +395,11 @@ void *realloc(void *ptr, size_t size) {
          fputs(printBuffer, stdout);
       }
 
-     // memset(blockToRealloc + blockToRealloc->size, 0, 
-     //       blockToRealloc->size - sizeof(blockHeader) - size);
-
       return (void *)blockToRealloc + sizeof(blockHeader);
    }
 
    /* Check for adjacent free block */
-   else if (blockToRealloc->next != NULL && blockToRealloc->next->isFree &&
+   /*else if (blockToRealloc->next != NULL && blockToRealloc->next->isFree &&
          ((blockToRealloc->next->size + blockToRealloc->size - 
            sizeof(blockHeader)) >= size)) {
 
@@ -399,30 +415,66 @@ void *realloc(void *ptr, size_t size) {
       //TODO: Probably should break this up
 
       return (void *)blockToRealloc + sizeof(blockHeader);
-   }
+   }*/
 
-   else {
-      /* Allocate totally new block, mark old as free */ 
+   else if (blockToRealloc->next != NULL && blockToRealloc->next->isFree) {
+      size_t adjacentSize = 0; 
+      int index = 0; 
+      blockHeader *adjacentToTake[100];
+      blockHeader *iterator = blockToRealloc->next;
+      
+      while (iterator != NULL && iterator->isFree) {
+         adjacentSize += iterator->size;
+         adjacentToTake[index++] = iterator;
 
-      if (debug) {
-         snprintf(printBuffer, 100, "Mallocing new block \n");
-         fputs(printBuffer, stdout);
+         iterator = iterator->next;
       }
 
-      newPtr = malloc(size);
-      if (newPtr == NULL) {
-         /* Problem with sbrk */ 
-         errno = ENOMEM;
-         return NULL;
+      if ((adjacentSize + blockToRealloc->size - sizeof(blockHeader)) >= size) {
+   
+         blockToRealloc->next = iterator;
+         blockToRealloc->size = blockToRealloc->size + adjacentSize;
+
+         return (void *)blockToRealloc + sizeof(blockHeader);
       }
-
-      memcpy(newPtr, blockToRealloc + sizeof(blockHeader), 
-            blockToRealloc->size - sizeof(blockHeader));
-
-      free(ptr);
-
-      return newPtr;
    }
+      
+   /* Allocate totally new block, mark old as free */ 
+
+   if (debug) {
+      snprintf(printBuffer, 100, 
+            "Mallocing new block. blockToRealloc: 0x%" PRIXPTR "\n", 
+            (uintptr_t)blockToRealloc);
+      fputs(printBuffer, stdout);
+   }
+
+   newPtr = malloc(size);
+   if (newPtr == NULL) {
+      /* Problem with sbrk */ 
+      errno = ENOMEM;
+      return NULL;
+   }
+
+   if (debug) {
+      snprintf(printBuffer, 100, 
+            "New Ptr: 0x%" PRIXPTR "\n", (uintptr_t)newPtr);
+      fputs(printBuffer, stdout);
+   }
+
+   if (debug) {
+      snprintf(printBuffer, 100, 
+            "Copying: 0x%" PRIXPTR " To: 0x%" PRIXPTR "\n", 
+            (uintptr_t)((void *)blockToRealloc + sizeof(blockHeader)), 
+            (uintptr_t)newPtr);
+      fputs(printBuffer, stdout);
+   }
+
+   memcpy(newPtr, (void *)blockToRealloc + sizeof(blockHeader), 
+         blockToRealloc->size - sizeof(blockHeader));
+
+   free(ptr);
+
+   return newPtr;
 }
 /*
 int main(int argc, char *argv[], char *envp[])

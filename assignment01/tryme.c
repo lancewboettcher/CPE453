@@ -1,6 +1,7 @@
 #include<string.h>
 #include<stdlib.h>
 #include<stdio.h>
+#include <inttypes.h>
 
 int main(int argc, char *argv[]) {
    char *s;
@@ -104,22 +105,38 @@ int main(int argc, char *argv[]) {
    //   free(ptr);
    }*/
 
-  
+  int alt = 0;
 
    for(i = 1; i < 8192; i++) {
       
-      snprintf(printBuffer, 100, "Allocating %d\n", i);
-      fputs(printBuffer, stdout);
+      if (alt == 0) {
 
-      ptr = realloc(ptr, i);
-
-      if(*ptr != 69) {
-         snprintf(printBuffer, 100, "ERROR %d\n", *ptr);
+         snprintf(printBuffer, 100, 
+               "***Realloc %d with 0x%" PRIXPTR "\n", i, (uintptr_t)ptr);
          fputs(printBuffer, stdout);
-         return 0;
+
+         ptr = realloc(ptr, i);
+      }
+      else {
+
+         snprintf(printBuffer, 100, "***Malloc %d\n", i);
+         fputs(printBuffer, stdout);
+
+         ptr = malloc(i);
       }
 
-      //*ptr = 69;
+      if(alt == 0) {
+         if(*ptr != 69) {
+            snprintf(printBuffer, 100, "ERROR %d\n", *ptr);
+            fputs(printBuffer, stdout);
+         return 0;
+         }
+         alt = 1;
+      }
+      else {
+         *ptr = 69;
+         alt = 0;
+      }
    }
 
    return 0;
