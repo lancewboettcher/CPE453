@@ -39,27 +39,45 @@ extern tid_t lwp_create(lwpfun function, void * args, size_t stackSize) {
    sched.admit(newThread);
 }
 
-extern void  lwp_exit(void) {
+extern void lwp_exit(void) {
+
+
+
 
 }
 
 extern tid_t lwp_gettid(void) {
 
-}
-
-extern void  lwp_yield(void) {
+   return curThread->thread->tid;
 
 }
 
-extern void  lwp_start(void) {
+extern void lwp_yield(void) {
+
+   if (numThreads < 1) {
+      return NULL;
+   }
+
+
 
 }
 
-extern void  lwp_stop(void) {
+extern void lwp_start(void) {
+
+   if (numThreads < 1) {
+      return NULL;
+   }
+
+   curThread = sched->next();
+
 
 }
 
-extern void  lwp_set_scheduler(scheduler fun) {
+extern void lwp_stop(void) {
+
+}
+
+extern void lwp_set_scheduler(scheduler fun) {
 
 }
 
@@ -82,15 +100,16 @@ void init() {
 
 void shutdown() {
 
-   threadNode *prev = NULL;
-
    while (threadHead != NULL) {
-      prev = threadHead 
-      remove(prev);
-
+      tmp = threadHead;
       threadHead = threadHead->next;
-   }
+      
+      /* Free the threads and stacks */
+      free(tmp->thread->stack);
+      free(tmp->thread);
 
+      numThreads--;
+   }
 
 }
 
@@ -159,6 +178,7 @@ void remove(thread victim) {
 
 thread next() {
 
+   return threadHead->thread;
 
 }
 
