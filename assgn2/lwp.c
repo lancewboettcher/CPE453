@@ -24,25 +24,32 @@ extern tid_t lwp_create(lwpfun function, void * args, size_t stackSize) {
    /* Setup stack */
    stackPtr = (void *)newThread->stack + stackSize;
    
-   stackPtr -= 7 * sizeof(tid_t); /* arguments */
+   stackPtr -= sizeof(tid_t); /* only need to allocate size of one function */
    *stackPtr = args;
-   stackPtr -= sizeof(tid_t); /* return address */
+   stackPtr -= sizeof(tid_t); /* return address                             */
    *stackPtr = (tid_t)lwp_exit;
-   stackPtr -= sizeof(lwpfun); /* function to call */
+   stackPtr -= sizeof(lwpfun); /* function to call                           */
    *stackPtr = function;
  
    newThread->stack.rbp = (tid_t)stackPtr;
    newThread->stack.rsp = (tid_t)stackPtr;
    
-   /* Setup registers? */
+   /* Setup registers */
+   newThread.state.rdi = *((tid_t *)args);
 
    sched.admit(newThread);
+
+   return newThread->tid;
 }
 
 extern void lwp_exit(void) {
+   /* save one context */
 
-
-
+   /* pick a thread to run */
+   if (sched->next) {
+      curThread = sched->next;      
+   }
+   /* load that thread's context */
 
 }
 
@@ -177,7 +184,6 @@ void remove(thread victim) {
 }
 
 thread next() {
-
    return threadHead->thread;
 
 }
