@@ -99,18 +99,17 @@ void init() {
 }
 
 void shutdown() {
-
+/*
    while (threadHead != NULL) {
       tmp = threadHead;
       threadHead = threadHead->next;
       
-      /* Free the threads and stacks */
       free(tmp->thread->stack);
       free(tmp->thread);
 
       numThreads--;
    }
-
+*/
 }
 
 void admit(thread new) {
