@@ -2,24 +2,26 @@
 #include <stdlib.h>
 #include "lwp.h"
 
-static scheduler sched = NULL;
+static scheduler sched;
 //scheduler sched = NULL;
 static unsigned long uniqueId = 0;
 
 /* Scheduler Variables */
 static struct threadNode *threadHead; /* Pointer to the head of the scheduler list  */
-static tid_t numThreads;       /* Total number of threads                    */
+static tid_t numThreads = 0;  /* Total number of threads                    */
 static thread curThread;       /* Current thread executing                   */
 static rfile realContext;      /* rfile of the process when start is called  */ 
 
 extern tid_t lwp_create(lwpfun function, void * args, size_t stackSize) {
+ fprintf(stderr, "got here\n");
    char *stackPtr;
 
    if (sched == NULL) {
      lwp_set_scheduler(NULL);
+     
+fprintf(stderr, "got in");
      sched->init();
    } 
-
    thread newThread = malloc(sizeof(context));
    newThread->stack = malloc(stackSize);
    newThread->stacksize = stackSize;
@@ -28,7 +30,7 @@ extern tid_t lwp_create(lwpfun function, void * args, size_t stackSize) {
    /* Setup stack */
    stackPtr = (void *)(newThread->stack) + stackSize;
    
-   //stackPtr -= sizeof(tid_t); /* only need to allocate size of one function */
+   stackPtr -= sizeof(tid_t); /* only need to allocate size of one function */
    stackPtr -= sizeof(tid_t); /* return address                             */
    *((tid_t *)stackPtr) = (tid_t)lwp_exit;
    stackPtr -= sizeof(lwpfun); /* function to call                           */
@@ -38,8 +40,11 @@ extern tid_t lwp_create(lwpfun function, void * args, size_t stackSize) {
    newThread->state.rsp = (tid_t)stackPtr;
    
    /* Setup registers */
-   newThread->state.rdi = *((tid_t *)args);
+   newThread->state.rdi = (tid_t)args;
 
+   fprintf(stderr, "%lu", newThread->state.rbp);
+   fprintf(stderr, "%lu", newThread->state.rsp);
+   fprintf(stderr, "%lu", newThread->state.rdi);
    sched->admit(newThread);
 
    return newThread->tid;
@@ -93,7 +98,7 @@ extern void lwp_start(void) {
    save_context(&realContext);
 
    curThread = sched->next();
-
+   
    /* Load new context */ 
    load_context(&(curThread->state));
 }
@@ -112,13 +117,19 @@ extern void lwp_set_scheduler(scheduler fun) {
    if (fun != NULL) {
       sched = fun;
    }
-   else {
-      sched->admit = &r_admit;
-      sched->remove = &r_remove;
-      sched->next = &r_next;
-      sched->init = NULL;
-      sched->shutdown = NULL;
+   else 
+   {
+      sched = malloc(5 * sizeof(tid_t));
+      fprintf(stderr, "before admit\n");
+      sched->admit = r_admit;
+      fprintf(stderr, "before remove\n");
+      sched->remove = r_remove;
+      fprintf(stderr, "before next\n");
+      sched->next = r_next;
+      sched->init = r_init;
+      sched->shutdown = r_shutdown;
    }
+   fprintf(stderr, "end set sched\n");
 }
 
 extern scheduler lwp_get_scheduler(void) {
@@ -128,7 +139,7 @@ extern scheduler lwp_get_scheduler(void) {
 extern thread tid2thread(tid_t tid) {
 
    struct threadNode *iterator = threadHead;
-   while (iterator != NULL && iterator->thread.tid != tid) {
+   while (iterator != NULL && (iterator->thread).tid != tid) {
       iterator = iterator->next;
    }
 
@@ -164,7 +175,7 @@ void r_admit(thread new) {
 
    if (threadHead == NULL) {
       /* First time calling admit. Empty list. */
-
+      threadHead = malloc(sizeof(struct threadNode));
       threadHead->thread = *new;
       threadHead->next = NULL; 
    }
@@ -202,7 +213,7 @@ void r_remove(thread victim) {
       return;
    }
 
-   while (iterator != NULL && iterator->thread.tid != victimId) {
+   while (iterator != NULL && (iterator->thread).tid != victimId) {
       /* Find the victim */ 
 
       prev = iterator;
@@ -240,9 +251,14 @@ thread r_next() {
       /* There are > 1 threads in the list */ 
 
       struct threadNode *iterator = threadHead;
-
+      fprintf(stderr, "numthreads is %lu\n", numThreads);
+      if (curThread == NULL) {
+         return &(threadHead->thread);
+         fprintf(stderr, "CURTHREAD = NULL\n");
+      }
+      fprintf(stderr, "tid = %lu", curThread->tid);
       /* find curThread's threadNode */ 
-      while (iterator != NULL && iterator->thread.tid != curThread->tid) {
+      while (iterator != NULL && (iterator->thread).tid != curThread->tid) {
          iterator = iterator->next;
       }
 
