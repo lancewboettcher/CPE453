@@ -1,30 +1,27 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include "lwp.h"
 
-scheduler sched = NULL;
+static struct scheduler sched = {NULL, NULL, r_admit, r_remove, r_next};
+//scheduler sched = NULL;
 unsigned long uniqueId = 0;
 
 /* Scheduler Variables */
 threadNode *threadHead; /* Pointer to the head of the scheduler list  */
 tid_t numThreads;       /* Total number of threads                    */
 thread curThread;       /* Current thread executing                   */
-rfile realContext;
+rfile realContext;      /* rfile of the process when start is called  */ 
 
 extern tid_t lwp_create(lwpfun function, void * args, size_t stackSize) {
    void *stackPtr; 
 
-   if (!lwp_get_scheduler()) {
-      sched = malloc(sizeof(scheduler));
-      init();
-   }
-
-   thread *newThread = malloc(sizeof(context));
+   thread newThread = malloc(sizeof(context));
    newThread->stack = malloc(stackSize);
    newThread->stacksize = stackSize;
    newThread->tid = uniqueId++;
 
    /* Setup stack */
-   stackPtr = (void *)newThread->stack + stackSize;
+   stackPtr = (void *)(newThread->stack) + stackSize;
    
    stackPtr -= sizeof(tid_t); /* only need to allocate size of one function */
    *stackPtr = args;
@@ -108,7 +105,9 @@ extern void lwp_stop(void) {
 }
 
 extern void lwp_set_scheduler(scheduler fun) {
-   sched = fun;
+   if (fun != NULL) {
+      sched = fun;
+   }
 }
 
 extern scheduler lwp_get_scheduler(void) {
@@ -126,7 +125,7 @@ extern thread tid2thread(tid_t tid) {
 }
 
 /* Scheduler Functions */ 
-void init() {
+void r_init() {
 
    threadHead = NULL;
    numThreads = 0;
@@ -134,7 +133,7 @@ void init() {
 
 }
 
-void shutdown() {
+void r_shutdown() {
 /*
    while (threadHead != NULL) {
       tmp = threadHead;
@@ -148,7 +147,7 @@ void shutdown() {
 */
 }
 
-void admit(thread new) {
+void r_admit(thread new) {
 
    threadNode *iterator;
 
@@ -176,7 +175,7 @@ void admit(thread new) {
    numThreads++;
 }
 
-void remove(thread victim) {
+void r_remove(thread victim) {
 
    threadNode *iterator = threadHead;
    threadNode *prev = NULL;
@@ -212,7 +211,7 @@ void remove(thread victim) {
    numThreads--;
 }
 
-thread next() {
+thread r_next() {
 
    if (numThreads < 1) {
       return NULL;

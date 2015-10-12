@@ -65,11 +65,11 @@ typedef struct threadNode {
 } threadNode;
 
 /* Scheduler Function Prototypes */
-void init();
-void shutdown();
-void admit(thread new);
-void remove(thread victim);
-thread next();
+void r_init();
+void r_shutdown();
+void r_admit(thread new);
+void r_remove(thread victim);
+thread r_next();
 
 /* lwp functions */
 extern tid_t lwp_create(lwpfun,void *,size_t);
