@@ -7,7 +7,8 @@ unsigned long uniqueId = 0;
 /* Scheduler Variables */
 threadNode *threadHead; /* Pointer to the head of the scheduler list  */
 tid_t numThreads;       /* Total number of threads                    */
-threadNode curThread;   /* Current thread executing                   */
+thread curThread;       /* Current thread executing                   */
+rfile realContext;
 
 extern tid_t lwp_create(lwpfun function, void * args, size_t stackSize) {
    void *stackPtr; 
@@ -55,7 +56,7 @@ extern void lwp_exit(void) {
 
 extern tid_t lwp_gettid(void) {
 
-   return curThread->thread->tid;
+   return curThread->tid;
 
 }
 
@@ -64,36 +65,54 @@ extern void lwp_yield(void) {
    if (numThreads < 1) {
       return NULL;
    }
+   
+   save_context(&(curThread->state));
 
+   curThread = *(sched->next());
 
-
+   load_context(&(curThread->state));
 }
 
 extern void lwp_start(void) {
-
    if (numThreads < 1) {
       return NULL;
    }
 
-   curThread = sched->next();
+   /* Save old Context */ 
+   save_context(&realContext);
 
+   curThread = *(sched->next());
 
+   /* Load new context */ 
+   load_context(&(curThread->state));
 }
 
 extern void lwp_stop(void) {
 
+   if (numThreads > 0) {
+      /* Only save the context if we have a thread*/ 
+      save_context(&(curThread->state));
+   }
+
+   load_context(&realContext);
 }
 
 extern void lwp_set_scheduler(scheduler fun) {
-
+   sched = fun;
 }
 
 extern scheduler lwp_get_scheduler(void) {
-
+   return sched;
 }
 
 extern thread tid2thread(tid_t tid) {
 
+   threadNode *iterator = thread
+   while (iterator != NULL && iterator->thread->tid != tid) {
+      iterator = iterator->next;
+   }
+
+   return iterator->thread;
 }
 
 /* Scheduler Functions */ 
@@ -175,15 +194,15 @@ void remove(thread victim) {
    /* Found the victim. Remove it from the list */
    prev->next = iterator->next;
 
-   /* Free the stack and thread*/ 
+   /* Free the stack and thread 
    free(iterator->thread->stack);
    free(iterator->thread);
-   
+   */
+
    numThreads--;
 }
 
 thread next() {
    return threadHead->thread;
-
 }
 
