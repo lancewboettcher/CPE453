@@ -13,7 +13,7 @@ thread curThread;       /* Current thread executing                   */
 rfile realContext;      /* rfile of the process when start is called  */ 
 
 extern tid_t lwp_create(lwpfun function, void * args, size_t stackSize) {
-   void *stackPtr; 
+   char *stackPtr; 
 
    thread newThread = malloc(sizeof(context));
    newThread->stack = malloc(stackSize);
@@ -23,18 +23,17 @@ extern tid_t lwp_create(lwpfun function, void * args, size_t stackSize) {
    /* Setup stack */
    stackPtr = (void *)(newThread->stack) + stackSize;
    
-   stackPtr -= sizeof(tid_t); /* only need to allocate size of one function */
-   *stackPtr = args;
+   //stackPtr -= sizeof(tid_t); /* only need to allocate size of one function */
    stackPtr -= sizeof(tid_t); /* return address                             */
-   *stackPtr = (tid_t)lwp_exit;
+   *((tid_t *)stackPtr) = (tid_t)lwp_exit;
    stackPtr -= sizeof(lwpfun); /* function to call                           */
-   *stackPtr = function;
+   *((lwpfun *)stackPtr) = function;
  
-   newThread->stack.rbp = (tid_t)stackPtr;
-   newThread->stack.rsp = (tid_t)stackPtr;
+   newThread->state.rbp = (tid_t)stackPtr;
+   newThread->state.rsp = (tid_t)stackPtr;
    
    /* Setup registers */
-   newThread.state.rdi = *((tid_t *)args);
+   newThread->state.rdi = *((tid_t *)args);
 
    sched.admit(newThread);
 
@@ -46,7 +45,7 @@ extern void lwp_exit(void) {
    thread toFree = curThread;
 
    /* pick a thread to run */
-   curThread = sched->next;
+   curThread = sched.next();
 
    /* if sched->next returns null there are no other threads, call lwp_stop() */
    if (!curThread) {
