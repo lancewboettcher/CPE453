@@ -6,24 +6,26 @@ static scheduler sched;
 //scheduler sched = NULL;
 static unsigned long uniqueId = 0;
 
-/* Scheduler Variables */
-static struct threadNode *threadHead; /* Pointer to the head of the scheduler list  */
+/* Scheduler Variables */ 
+/* Pointer to the head of the scheduler list  */
+static struct threadNode *threadHead;
 static tid_t numThreads = 0;  /* Total number of threads                    */
 static thread curThread;       /* Current thread executing                   */
 static rfile realContext;      /* rfile of the process when start is called  */ 
 
 extern tid_t lwp_create(lwpfun function, void * args, size_t stackSize) {
- fprintf(stderr, "got here\n");
+#ifdef DEBUG
+   fprintf(stderr, "lwp_create called\n");
+#endif
    char *stackPtr;
 
    if (sched == NULL) {
      lwp_set_scheduler(NULL);
      
-fprintf(stderr, "got in");
      sched->init();
    } 
    thread newThread = malloc(sizeof(context));
-   newThread->stack = malloc(stackSize);
+   newThread->stack = malloc(stackSize * sizeof(tid_t));
    newThread->stacksize = stackSize;
    newThread->tid = uniqueId++;
 
@@ -42,18 +44,23 @@ fprintf(stderr, "got in");
    /* Setup registers */
    newThread->state.rdi = (tid_t)args;
 
-   fprintf(stderr, "%lu", newThread->state.rbp);
-   fprintf(stderr, "%lu", newThread->state.rsp);
-   fprintf(stderr, "%lu", newThread->state.rdi);
    sched->admit(newThread);
 
    return newThread->tid;
 }
 
 extern void lwp_exit(void) {
+#ifdef DEBUG
+   fprintf(stderr, "exit called\n");
+#endif
    /* save one context */
    thread toFree = curThread;
 
+   sched->remove(toFree);
+   
+#ifdef DEBUG
+   fprintf(stderr, "exit attempting to call next\n");
+#endif
    /* pick a thread to run */
    curThread = sched->next();
 
@@ -77,6 +84,9 @@ extern tid_t lwp_gettid(void) {
 }
 
 extern void lwp_yield(void) {
+#ifdef DEBUG
+   fprintf(stderr, "yield called\n");
+#endif
 
    if (numThreads < 1) {
       return;
@@ -90,6 +100,9 @@ extern void lwp_yield(void) {
 }
 
 extern void lwp_start(void) {
+#ifdef DEBUG
+   fprintf(stderr, "start called\n");
+#endif
    if (numThreads < 1) {
       return;
    }
@@ -101,6 +114,10 @@ extern void lwp_start(void) {
    
    /* Load new context */ 
    load_context(&(curThread->state));
+#ifdef DEBUG
+   if (curThread == NULL)
+   fprintf(stderr, "curThread == NULL after start called\n");
+#endif
 }
 
 extern void lwp_stop(void) {
@@ -114,22 +131,33 @@ extern void lwp_stop(void) {
 }
 
 extern void lwp_set_scheduler(scheduler fun) {
+#ifdef DEBUG
+   fprintf(stderr, "set sched called\n");
+#endif
    if (fun != NULL) {
       sched = fun;
    }
    else 
    {
       sched = malloc(5 * sizeof(tid_t));
+#ifdef DEBUG
       fprintf(stderr, "before admit\n");
+#endif
       sched->admit = r_admit;
+#ifdef DEBUG
       fprintf(stderr, "before remove\n");
+#endif
       sched->remove = r_remove;
+#ifdef DEBUG
       fprintf(stderr, "before next\n");
+#endif
       sched->next = r_next;
       sched->init = r_init;
       sched->shutdown = r_shutdown;
    }
+#ifdef DEBUG
    fprintf(stderr, "end set sched\n");
+#endif
 }
 
 extern scheduler lwp_get_scheduler(void) {
@@ -170,7 +198,9 @@ void r_shutdown() {
 }
 
 void r_admit(thread new) {
-
+#ifdef DEBUG
+   fprintf(stderr, "admit called\n");
+#endif
    struct threadNode *iterator;
 
    if (threadHead == NULL) {
@@ -203,6 +233,9 @@ void r_admit(thread new) {
 
 void r_remove(thread victim) {
 
+#ifdef DEBUG
+   fprintf(stderr, "r_remove called\n");
+#endif
    struct threadNode *iterator = threadHead;
    struct threadNode *prev = NULL;
    tid_t victimId = victim->tid;
@@ -227,7 +260,13 @@ void r_remove(thread victim) {
    }
 
    /* Found the victim. Remove it from the list */
-   prev->next = iterator->next;
+   if (iterator == threadHead) {
+      /* threadHead was the victim */ 
+      threadHead = threadHead->next;  
+   }
+   else {
+      prev->next = iterator->next;
+   }
 
    /* Free the stack and thread 
    free(iterator->thread->stack);
@@ -238,39 +277,60 @@ void r_remove(thread victim) {
 }
 
 thread r_next() {
+#ifdef DEBUG
+   fprintf(stderr, "next is called\n");
+#endif
+   thread ret;
 
    if (numThreads < 1) {
-      return NULL;
+      ret =  NULL;
    }
-
    else if (numThreads == 1) {
-      return &(threadHead->thread);
+      ret = &(threadHead->thread);
    }
-
    else {
       /* There are > 1 threads in the list */ 
+#ifdef DEBUG
+      fprintf(stderr, "NEXT: > 1 threads\n");
+#endif
 
       struct threadNode *iterator = threadHead;
+#ifdef DEBUG
       fprintf(stderr, "numthreads is %lu\n", numThreads);
+#endif
       if (curThread == NULL) {
-         return &(threadHead->thread);
+#ifdef DEBUG
          fprintf(stderr, "CURTHREAD = NULL\n");
+#endif
+         if (threadHead != NULL) { 
+#ifdef DEBUG
+            fprintf(stderr, "THREADEHAD != NULL\n");
+#endif
+         }
+         ret = &(threadHead->thread);
       }
-      fprintf(stderr, "tid = %lu", curThread->tid);
-      /* find curThread's threadNode */ 
-      while (iterator != NULL && (iterator->thread).tid != curThread->tid) {
-         iterator = iterator->next;
-      }
+      else { 
+         /* find curThread's threadNode */ 
+         while (iterator != NULL && (iterator->thread).tid != curThread->tid) {
+            iterator = iterator->next;
+         }
 
-      if (iterator->next != NULL) {
-         return &(iterator->next->thread);
-      }
-      else {
-         /* Circle back to the beginning of the list */ 
+         if (iterator->next != NULL) {
+            ret = &(iterator->next->thread);
+         }
+         else {
+            /* Circle back to the beginning of the list */ 
 
-         return &(threadHead->thread);
+            ret = &(threadHead->thread);
+         }
       }
    }
+
+#ifdef DEBUG
+      fprintf(stderr, "next returning: %lu\n", ret);
+#endif
+
+   return ret;
 }
 
 
