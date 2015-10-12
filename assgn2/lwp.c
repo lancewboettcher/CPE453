@@ -13,8 +13,9 @@ rfile realContext;
 extern tid_t lwp_create(lwpfun function, void * args, size_t stackSize) {
    void *stackPtr; 
 
-   if (!sched) {
+   if (!lwp_get_scheduler()) {
       sched = malloc(sizeof(scheduler));
+      init();
    }
 
    thread *newThread = malloc(sizeof(context));
@@ -45,13 +46,22 @@ extern tid_t lwp_create(lwpfun function, void * args, size_t stackSize) {
 
 extern void lwp_exit(void) {
    /* save one context */
+   thread toFree = curThread;
 
    /* pick a thread to run */
-   if (sched->next) {
-      curThread = sched->next;      
-   }
-   /* load that thread's context */
+   curThread = sched->next;
 
+   /* if sched->next returns null there are no other threads, call lwp_stop() */
+   if (!curThread) {
+      lwp_stop();
+   } else {
+      /* load that thread's context */
+      load_context(&(curThread->state));
+   }
+   
+   /* free the old thread */
+   free(toFree->stack);
+   free(toFree);
 }
 
 extern tid_t lwp_gettid(void) {
