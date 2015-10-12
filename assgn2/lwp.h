@@ -59,10 +59,10 @@ typedef struct scheduler {
   thread (*next)();                /* select a thread to schedule   */
 } *scheduler;
 
-typedef struct threadNode {
+struct threadNode {
    context thread;
-   thread next;
-} threadNode;
+   struct threadNode *next;
+};
 
 /* Scheduler Function Prototypes */
 void r_init();

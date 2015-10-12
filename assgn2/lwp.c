@@ -116,8 +116,8 @@ extern scheduler lwp_get_scheduler(void) {
 
 extern thread tid2thread(tid_t tid) {
 
-   threadNode *iterator = thread
-   while (iterator != NULL && iterator->thread->tid != tid) {
+   threadNode *iterator = threadHead;
+   while (iterator != NULL && iterator->thread.tid != tid) {
       iterator = iterator->next;
    }
 
@@ -187,7 +187,7 @@ void r_remove(thread victim) {
       return NULL;
    }
 
-   while (iterator != NULL && iterator->tid != victimId) {
+   while (iterator != NULL && iterator->thread.tid != victimId) {
       /* Find the victim */ 
 
       prev = iterator;
@@ -227,7 +227,7 @@ thread r_next() {
       threadNode *iterator = threadHead;
 
       /* find curThread's threadNode */ 
-      while (iterator != NULL && iterator->thread->tid != curThread->tid) {
+      while (iterator != NULL && iterator->thread.tid != curThread->tid) {
          iterator = iterator->next;
       }
 
