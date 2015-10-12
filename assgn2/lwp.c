@@ -203,6 +203,35 @@ void remove(thread victim) {
 }
 
 thread next() {
-   return threadHead->thread;
+
+   if (numThreads < 1) {
+      return NULL;
+   }
+
+   else if (numThreads == 1) {
+      return threadHead->thread;
+   }
+
+   else {
+      /* There are > 1 threads in the list */ 
+
+      threadNode *iterator = threadHead;
+
+      /* find curThread's threadNode */ 
+      while (iterator != NULL && iterator->thread->tid != curThread->tid) {
+         iterator = iterator->next;
+      }
+
+      if (iterator->next != NULL) {
+         return iterator->next->thread;
+      }
+      else {
+         /* Circle back to the beginning of the list */ 
+
+         return threadHead->thread;
+      }
+   }
 }
+
+
 
