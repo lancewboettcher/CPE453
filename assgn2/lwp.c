@@ -13,8 +13,9 @@ rfile realContext;
 extern tid_t lwp_create(lwpfun function, void * args, size_t stackSize) {
    void *stackPtr; 
 
-   if (!sched) {
+   if (!lwp_get_scheduler()) {
       sched = malloc(sizeof(scheduler));
+      init();
    }
 
    thread *newThread = malloc(sizeof(context));
