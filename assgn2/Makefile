@@ -50,10 +50,10 @@ snakemain.o: lwp.h snakes.h
 
 numbermain.o: lwp.h
 
-#libPLN.a: ../Publish/lwp.c
-#	gcc -c ../Publish/lwp.c
-#	ar r libPLN.a lwp.o
-#	rm lwp.o
+libPLN.a: ../Publish/lwp.c
+	gcc -c ../Publish/lwp.c
+	ar r libPLN.a lwp.o
+	rm lwp.o
 
 pub:
 	scp $(PUBFILES) $(TARGET)
