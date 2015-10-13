@@ -58,7 +58,9 @@ extern void lwp_exit(void) {
    /* save one context */
    thread toFree = curThread;
 
+   //fprintf(stderr, "Before Remove \n");
    sched->remove(toFree);
+   //fprintf(stderr, "AfterRemove \n");
    
 #ifdef DEBUG
    fprintf(stderr, "exit attempting to call next\n");
