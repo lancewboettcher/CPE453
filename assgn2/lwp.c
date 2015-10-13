@@ -130,32 +130,54 @@ extern void lwp_stop(void) {
       save_context(&(curThread->state));
    }
 
-   load_context(&realContext);
-
    if (sched->shutdown != NULL) {
       sched->shutdown();
    }
+   
+   load_context(&realContext);
 }
 
 extern void lwp_set_scheduler(scheduler fun) {
 #ifdef DEBUG
    fprintf(stderr, "set sched called\n");
 #endif
-   if (fun != NULL) {
+   //TODO: clean up  
+   if (sched != NULL && fun != NULL) {
+      /* if scheduler is previously initialized, swictch scheduler */
+      thread tempThread;
+
+      if (fun->init != NULL) {
+         fun->init();
+      }
+
+      while ((tempThread = sched->next())) {
+         fun->admit(tempThread);
+         sched->remove(tempThread);
+      }
+
+      if (sched->shutdown) {
+         sched->shutdown();
+      }
+
       sched = fun;
    }
-   else 
-   {
-      sched = malloc(5 * sizeof(tid_t));
-      sched->admit = r_admit;
-      sched->remove = r_remove;
-      sched->next = r_next;
-      sched->init = r_init;
-      sched->shutdown = r_shutdown;
-   }
+   else {
+      if (fun != NULL) {
+         sched = fun;
+      }
+      else 
+      {
+         sched = malloc(5 * sizeof(tid_t));
+         sched->admit = r_admit;
+         sched->remove = r_remove;
+         sched->next = r_next;
+         sched->init = r_init;
+         sched->shutdown = r_shutdown;
+      }
 
-   if (sched->init != NULL) {
-      sched->init();
+      if (sched->init != NULL) {
+         sched->init();
+      }
    }
 }
 
