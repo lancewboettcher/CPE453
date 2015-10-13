@@ -71,7 +71,7 @@ Done.  Count is 50000. (Yielded 406869 times)
 Submitted:
 ----------
 Timed out.
-Child process (1133) exited due to SIGTERM.
+Child process (3083) exited due to SIGTERM.
 
 ---------------------------------
 Differences (< reference > output)
@@ -82,7 +82,7 @@ Differences (< reference > output)
 < Done.  Count is 50000. (Yielded 406869 times)
 ---
 > Timed out.
-> Child process (1133) exited due to SIGTERM.
+> Child process (3083) exited due to SIGTERM.
 ---------
 =================================================
 TEST 18: Ping pong with semaphores
@@ -617,7 +617,7 @@ Back from LWPS.
 ----------
 Submitted:
 ----------
-Child process (1399) exited due to SIGSEGV.
+Child process (3191) exited due to SIGSEGV.
 
 ---------------------------------
 Differences (< reference > output)
@@ -644,7 +644,7 @@ Differences (< reference > output)
 <                         5
 < Back from LWPS.
 ---
-> Child process (1399) exited due to SIGSEGV.
+> Child process (3191) exited due to SIGSEGV.
 ---------
 =================================================
 TEST 21: Transfer threads between schedulers (live)
@@ -696,7 +696,7 @@ Back from LWPS.
 ----------
 Submitted:
 ----------
-Child process (1440) exited due to SIGSEGV.
+Child process (3213) exited due to SIGSEGV.
 
 ---------------------------------
 Differences (< reference > output)
@@ -738,7 +738,7 @@ Differences (< reference > output)
 <                         5
 < Back from LWPS.
 ---
-> Child process (1440) exited due to SIGSEGV.
+> Child process (3213) exited due to SIGSEGV.
 ---------
 =================================================
 TEST 22: Sched->next() returns NULL to lwp_yield()

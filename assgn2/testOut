@@ -3,7 +3,7 @@
 Looking for source files
 ------------------------
 
-Found: hungrymain.c lwp.c lwpclean.c lwp.h numbersmain.c snakemain.c snakes.h
+Found: hungrymain.c lwp.c lwpclean.c lwp.h lwpTestSched.c numbersmain.c snakemain.c snakes.h
 
 -----------------------
 Looking for a Makefile
@@ -142,19 +142,17 @@ Done.  Count is 50000. (Yielded 406869 times)
 ----------
 Submitted:
 ----------
-Timed out.
-Child process (1878) exited due to SIGTERM.
-
+^C
 ---------------------------------
 Differences (< reference > output)
 ---------------------------------
 
-1,2c1,2
+1,2c1
 < Spawining 4096 threads.
 < Done.  Count is 50000. (Yielded 406869 times)
 ---
-> Timed out.
-> Child process (1878) exited due to SIGTERM.
+> ^C
+\ No newline at end of file
 ---------
 =================================================
 TEST 18: Ping pong with semaphores
@@ -689,7 +687,7 @@ Back from LWPS.
 ----------
 Submitted:
 ----------
-Child process (1994) exited due to SIGSEGV.
+Child process (3656) exited due to SIGSEGV.
 
 ---------------------------------
 Differences (< reference > output)
@@ -716,7 +714,7 @@ Differences (< reference > output)
 <                         5
 < Back from LWPS.
 ---
-> Child process (1994) exited due to SIGSEGV.
+> Child process (3656) exited due to SIGSEGV.
 ---------
 =================================================
 TEST 21: Transfer threads between schedulers (live)
@@ -768,7 +766,7 @@ Back from LWPS.
 ----------
 Submitted:
 ----------
-Child process (2016) exited due to SIGSEGV.
+Child process (3678) exited due to SIGSEGV.
 
 ---------------------------------
 Differences (< reference > output)
@@ -810,7 +808,7 @@ Differences (< reference > output)
 <                         5
 < Back from LWPS.
 ---
-> Child process (2016) exited due to SIGSEGV.
+> Child process (3678) exited due to SIGSEGV.
 ---------
 =================================================
 TEST 22: Sched->next() returns NULL to lwp_yield()

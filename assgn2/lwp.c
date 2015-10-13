@@ -19,11 +19,13 @@ extern tid_t lwp_create(lwpfun function, void * args, size_t stackSize) {
 #endif
    char *stackPtr;
 
+   /* TODO: We might not need this */
    if (sched == NULL) {
      lwp_set_scheduler(NULL);
      
      sched->init();
-   } 
+   }
+
    thread newThread = malloc(sizeof(context));
    newThread->stack = malloc(stackSize * sizeof(tid_t));
    newThread->stacksize = stackSize;
