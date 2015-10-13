@@ -14,6 +14,7 @@ static unsigned long uniqueId = 0;
 /* Scheduler Variables */
 static struct threadNode *threadHead;        /* Head of the scheduler list   */
 static tid_t numThreads = 0;                 /* Total number of threads      */
+static struct threadNode *endOfList;         /* Tail of the scheduler list   */
 
 extern tid_t lwp_create(lwpfun function, void * args, size_t stackSize) {
 #ifdef DEBUG
@@ -106,7 +107,6 @@ extern void lwp_yield(void) {
    curThread = sched->next();
 
    if (curThread == NULL) {
-      //TODO: IDK if this is right
       lwp_exit();
    }
 
@@ -210,6 +210,7 @@ extern thread tid2thread(tid_t tid) {
 }
 
 /* Scheduler Functions */ 
+
 void r_init() {
 }
 
@@ -227,6 +228,8 @@ void r_admit(thread new) {
       threadHead = malloc(sizeof(struct threadNode));
       threadHead->thread = *new;
       threadHead->next = NULL; 
+
+      endOfList = threadHead;
    }
 
    else {
@@ -237,14 +240,9 @@ void r_admit(thread new) {
       struct threadNode *newNode = malloc(sizeof(struct threadNode));
       newNode->thread = *new;
       newNode->next = NULL;
-
-      while (iterator->next) {
-         /* Find the end of the list */
-         iterator = iterator->next;
-      }
-
-      iterator->next = newNode;
-
+      
+      endOfList->next = newNode;
+      endOfList = newNode;
    }
 
    numThreads++;
@@ -259,8 +257,8 @@ void r_remove(thread victim) {
    struct threadNode *prev = NULL;
    tid_t victimId = victim->tid;
 
-   if (threadHead == NULL) {
-      /* Empty list. No threads*/ 
+   if (threadHead == NULL || victim == NULL) {
+      /* Empty list or NULL victim */ 
 
       return;
    }
@@ -284,13 +282,13 @@ void r_remove(thread victim) {
       threadHead = threadHead->next;  
    }
    else {
+      if (iterator->next == NULL) {
+         endOfList = prev;
+      }
       prev->next = iterator->next;
-   }
 
-   /* Free the stack and thread 
-   free(iterator->thread->stack);
-   free(iterator->thread);
-   */
+   
+   }
 
    numThreads--;
 }
@@ -315,16 +313,12 @@ thread r_next() {
       ret = &(threadHead->thread);
       
       /* Move threadHead to the back of the list */ 
-      
-      struct threadNode *iterator = threadHead;
-
-      while (iterator->next != NULL) {
-         iterator = iterator->next;
-      }
-      iterator->next = threadHead;
+      endOfList->next = threadHead;
+      endOfList = threadHead;
 
       threadHead = threadHead->next;
-      iterator->next->next = NULL;
+
+      endOfList->next = NULL;
    }
 
    return ret;
