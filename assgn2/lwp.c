@@ -1,7 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "lwp.h"
-
+//TODO: delete
+#include <stdint.h>
+#include <inttypes.h>
 static scheduler sched;
 
 /* LWP Variables */
@@ -15,8 +17,8 @@ static tid_t numThreads = 0;                 /* Total number of threads      */
 
 extern tid_t lwp_create(lwpfun function, void * args, size_t stackSize) {
 #ifdef DEBUG
-   fprintf(stderr, "lwp_create called\n");
 #endif
+   fprintf(stderr, "lwp_create called\n");
    char *stackPtr;
 
    if (sched == NULL) {
@@ -44,9 +46,9 @@ extern tid_t lwp_create(lwpfun function, void * args, size_t stackSize) {
    
    /* Setup registers */
    newThread->state.rdi = (tid_t)args;
-
    sched->admit(newThread);
 
+   fprintf(stderr, "got after admit\n");
    return newThread->tid;
 }
 
@@ -56,12 +58,20 @@ extern void lwp_exit(void) {
 #endif
    /* save one context */
    thread toFree = curThread;
+  
+   //fprintf(stderr, "exit called on %lu\n", lwp_gettid());
+   if (toFree != NULL) {
+      //fprintf(stderr, 
+            //"Seg fault occurs here, ADDR 0x%" PRIXPTR "\n", 
+            //(uintptr_t)toFree);
+      fprintf(stderr, "seg fault occurs here\n");
+      if (sched->next() != NULL) {
+         fprintf(stderr, "next never gets here\n");
+         sched->remove(toFree);
+      }
+      fprintf(stderr, "and never gets here\n");
+   }
 
-   sched->remove(toFree);
-   
-#ifdef DEBUG
-   fprintf(stderr, "exit attempting to call next\n");
-#endif
    /* pick a thread to run */
    curThread = sched->next();
 
@@ -74,8 +84,10 @@ extern void lwp_exit(void) {
    }
    
    /* free the old thread */
-   free(toFree->stack);
-   free(toFree);
+   if (toFree != NULL) {
+      free(toFree->stack);
+      free(toFree);
+   }
 }
 
 extern tid_t lwp_gettid(void) {
@@ -90,7 +102,7 @@ extern void lwp_yield(void) {
 #endif
 
    save_context(&(curThread->state));
-
+   
    curThread = sched->next();
 
    if (curThread == NULL) {
@@ -163,6 +175,7 @@ extern void lwp_set_scheduler(scheduler fun) {
    }
    else {
       if (fun != NULL) {
+   fprintf(stderr, "set sched called\n");
          sched = fun;
       }
       else 
@@ -179,6 +192,7 @@ extern void lwp_set_scheduler(scheduler fun) {
          sched->init();
       }
    }
+   
 }
 
 extern scheduler lwp_get_scheduler(void) {

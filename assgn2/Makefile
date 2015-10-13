@@ -27,7 +27,7 @@ HDRS	=
 
 EXTRACLEAN = core $(PROGS)
 
-liblwp.so:
+liblwp.so: clean
 	$(CC) $(CFLAGS) -g -fPIC -m64 -c lwp.c lwp.h
 	$(CC) $(CFLAGS) -g -fPIC -m64 -c -o magic64.o magic64.S
 	$(CC) $(CFLAGS) -g -fPIC -shared -o $@ lwp.o magic64.o
