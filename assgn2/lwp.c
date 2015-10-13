@@ -3,15 +3,15 @@
 #include "lwp.h"
 
 static scheduler sched;
-//scheduler sched = NULL;
+
+/* LWP Variables */
+static thread curThread;       /* Current thread executing                   */
+static rfile realContext;      /* rfile of the process when start is called  */
 static unsigned long uniqueId = 0;
 
-/* Scheduler Variables */ 
-/* Pointer to the head of the scheduler list  */
-static struct threadNode *threadHead;
-static tid_t numThreads = 0;  /* Total number of threads                    */
-static thread curThread;       /* Current thread executing                   */
-static rfile realContext;      /* rfile of the process when start is called  */ 
+/* Scheduler Variables */
+static struct threadNode *threadHead;        /* Head of the scheduler list   */
+static tid_t numThreads = 0;                 /* Total number of threads      */
 
 extern tid_t lwp_create(lwpfun function, void * args, size_t stackSize) {
 #ifdef DEBUG
@@ -92,13 +92,14 @@ extern void lwp_yield(void) {
    fprintf(stderr, "yield called\n");
 #endif
 
-   if (numThreads < 1) {
-      return;
-   }
-   
    save_context(&(curThread->state));
 
    curThread = sched->next();
+
+   if (curThread == NULL) {
+      //TODO: IDK if this is right
+      lwp_exit();
+   }
 
    load_context(&(curThread->state));
 }
@@ -107,9 +108,6 @@ extern void lwp_start(void) {
 #ifdef DEBUG
    fprintf(stderr, "start called\n");
 #endif
-   if (numThreads < 1) {
-      return;
-   }
 
    /* Save old Context */ 
    save_context(&realContext);
@@ -126,10 +124,8 @@ extern void lwp_start(void) {
 
 extern void lwp_stop(void) {
 
-   if (numThreads > 0) {
-      /* Only save the context if we have a thread*/ 
-      save_context(&(curThread->state));
-   }
+   //TODO: IDK if we should always be saving...
+   save_context(&(curThread->state));
 
    load_context(&realContext);
 }
