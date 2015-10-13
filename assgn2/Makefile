@@ -57,7 +57,6 @@ liblwp.so: liblwp.o
 #	gcc -c ../Publish/lwp.c
 #	ar r libPLN.a lwp.o
 #	rm lwp.o
-
 pub:
 	scp $(PUBFILES) $(TARGET)
 
