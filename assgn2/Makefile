@@ -27,6 +27,11 @@ HDRS	=
 
 EXTRACLEAN = core $(PROGS)
 
+liblwp.so:
+	$(CC) $(CFLAGS) -g -fPIC -m64 -c lwp.c lwp.h
+	$(CC) $(CFLAGS) -g -fPIC -m64 -c -o magic64.o magic64.S
+	$(CC) $(CFLAGS) -g -fPIC -shared -o $@ lwp.o magic64.o
+
 all: 	$(PROGS)
 
 allclean: clean
@@ -34,6 +39,7 @@ allclean: clean
 
 clean:	
 	rm -f $(OBJS) *~ TAGS
+	rm -f liblwp.so
 
 snakes: snakemain.o libPLN.a libsnakes.a
 	$(LD) $(LDFLAGS) -o snakes snakemain.o -L. -lncurses -lsnakes -lPLN
@@ -50,9 +56,6 @@ snakemain.o: lwp.h snakes.h
 
 numbermain.o: lwp.h
 
-liblwp.so: liblwp.o
-	gcc -Wall -g -fpic -c -o -d DEBUG liblwp.o magic64.S lwp.c
-	gcc -Wall -g -fpic -shared -o liblwp.so liblwp.o
 #libPLN.a: ../Publish/lwp.c
 #	gcc -c ../Publish/lwp.c
 #	ar r libPLN.a lwp.o

@@ -1,3 +1,75 @@
+
+------------------------
+Looking for source files
+------------------------
+
+Found: hungrymain.c lwp.c lwpclean.c lwp.h numbersmain.c snakemain.c snakes.h
+
+-----------------------
+Looking for a Makefile
+----------------------
+
+Found: Makefile
+
+--------------------------------
+Checking for long lines (no program should have any lines > 80 chars)
+--------------------------------
+
+Line length ok.
+
+
+------------------------------------
+Building the application: "make liblwp.so"
+------------------------------------
+
+make liblwp.so
+make: `liblwp.so' is up to date.
+
+---------------
+checking for liblwp.so
+---------------
+
+
+--------------------------------------------------------
+Test Results:
+   These are the results of trying your liblwp.so
+against several programs with different characteristics 
+described by the filename.  The output of your program
+is compared to a reference output using diff(1).  If they
+differ, the test case is a failure.
+
+
+Testing (failure details below):
+        -----
+         1) Linking (only) against required routines      ... ok.
+         2) start() with no threads                       ... ok.
+         3) One lwp, calling exit()                       ... ok.
+         4) One lwp, calling lwp_yield(), then exit()     ... ok.
+         5) One lwp, calling lwp_yield(), then lwp_exit() ... ok.
+         6) Five lwps, calling lwp_yield(), then exit()   ... ok.
+         7) Five lwps, calling lwp_yield(), then lwp_exit ... ok.
+         8) Five threads, variable iters, exit from front ... ok.
+         9) Five threads, variable iters, exit from back  ... ok.
+        10) Five threads, AlwaysZero scheduling           ... FAILURE.
+        11) One lwp, yields, and returns                  ... ok.
+        12) Ten lwps, yields, and returns                 ... ok.
+        13) Three lwps. Stop, then restart                ... ok.
+        14) Lwp spawns another then exits 100 times.      ... ok.
+        15) Two Lwps. spawn then exits 50 times.          ... ok.
+        16) 100 threads with a minimal stack. Just return ... ok.
+        17) 1024 threads, random exit.                    ... FAILURE.
+        18) Ping pong with semaphores                     ... FAILURE.
+        19) Dine with semaphores                          ... FAILURE.
+        20) Transfer threads between schedulers (stopped) ... FAILURE.
+        21) Transfer threads between schedulers (live)    ... FAILURE.
+        22) Sched->next() returns NULL to lwp_yield()     ... FAILURE.
+        -----
+FAILURE. (15/22 passed)
+
+
+-----------------------------------------------------------------
+Failure Details
+-----------------------------------------------------------------
 =================================================
 TEST 10: Five threads, AlwaysZero scheduling
 
@@ -71,7 +143,7 @@ Done.  Count is 50000. (Yielded 406869 times)
 Submitted:
 ----------
 Timed out.
-Child process (1133) exited due to SIGTERM.
+Child process (1878) exited due to SIGTERM.
 
 ---------------------------------
 Differences (< reference > output)
@@ -82,7 +154,7 @@ Differences (< reference > output)
 < Done.  Count is 50000. (Yielded 406869 times)
 ---
 > Timed out.
-> Child process (1133) exited due to SIGTERM.
+> Child process (1878) exited due to SIGTERM.
 ---------
 =================================================
 TEST 18: Ping pong with semaphores
@@ -617,7 +689,7 @@ Back from LWPS.
 ----------
 Submitted:
 ----------
-Child process (1399) exited due to SIGSEGV.
+Child process (1994) exited due to SIGSEGV.
 
 ---------------------------------
 Differences (< reference > output)
@@ -644,7 +716,7 @@ Differences (< reference > output)
 <                         5
 < Back from LWPS.
 ---
-> Child process (1399) exited due to SIGSEGV.
+> Child process (1994) exited due to SIGSEGV.
 ---------
 =================================================
 TEST 21: Transfer threads between schedulers (live)
@@ -696,7 +768,7 @@ Back from LWPS.
 ----------
 Submitted:
 ----------
-Child process (1440) exited due to SIGSEGV.
+Child process (2016) exited due to SIGSEGV.
 
 ---------------------------------
 Differences (< reference > output)
@@ -738,7 +810,7 @@ Differences (< reference > output)
 <                         5
 < Back from LWPS.
 ---
-> Child process (1440) exited due to SIGSEGV.
+> Child process (2016) exited due to SIGSEGV.
 ---------
 =================================================
 TEST 22: Sched->next() returns NULL to lwp_yield()

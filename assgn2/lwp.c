@@ -37,6 +37,8 @@ extern tid_t lwp_create(lwpfun function, void * args, size_t stackSize) {
    *((tid_t *)stackPtr) = (tid_t)lwp_exit;
    stackPtr -= sizeof(lwpfun); /* function to call                           */
    *((lwpfun *)stackPtr) = function;
+
+   stackPtr -= sizeof(lwpfun);
  
    newThread->state.rbp = (tid_t)stackPtr;
    newThread->state.rsp = (tid_t)stackPtr;
@@ -176,25 +178,9 @@ extern thread tid2thread(tid_t tid) {
 
 /* Scheduler Functions */ 
 void r_init() {
-/*
-   threadHead = NULL;
-   numThreads = 0;
-   currentThread = NULL;
-*/
 }
 
 void r_shutdown() {
-/*
-   while (threadHead != NULL) {
-      tmp = threadHead;
-      threadHead = threadHead->next;
-      
-      free(tmp->thread->stack);
-      free(tmp->thread);
-
-      numThreads--;
-   }
-*/
 }
 
 void r_admit(thread new) {
@@ -297,7 +283,7 @@ thread r_next() {
       
       /* Move threadHead to the back of the list */ 
       
-      threadNode *iterator = threadHead;
+      struct threadNode *iterator = threadHead;
 
       while (iterator->next != NULL) {
          iterator = iterator->next;
@@ -307,10 +293,6 @@ thread r_next() {
       threadHead = threadHead->next;
       iterator->next->next = NULL;
    }
-
-#ifdef DEBUG
-      fprintf(stderr, "next returning: %lu\n", ret);
-#endif
 
    return ret;
 }
