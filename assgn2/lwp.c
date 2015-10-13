@@ -94,7 +94,6 @@ extern void lwp_yield(void) {
    curThread = sched->next();
 
    if (curThread == NULL) {
-      //TODO: IDK if this is right
       lwp_exit();
    }
 
@@ -245,8 +244,8 @@ void r_remove(thread victim) {
    struct threadNode *prev = NULL;
    tid_t victimId = victim->tid;
 
-   if (threadHead == NULL) {
-      /* Empty list. No threads*/ 
+   if (threadHead == NULL || victim == NULL) {
+      /* Empty list or NULL victim */ 
 
       return;
    }
