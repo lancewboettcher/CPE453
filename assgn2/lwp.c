@@ -123,11 +123,15 @@ extern void lwp_start(void) {
 }
 
 extern void lwp_stop(void) {
-
-   //TODO: IDK if we should always be saving...
-   save_context(&(curThread->state));
+   if (curThread != NULL) {
+      save_context(&(curThread->state));
+   }
 
    load_context(&realContext);
+/*
+   if (sched->shutdown != NULL) {
+      sched->shutdown();
+   }*/
 }
 
 extern void lwp_set_scheduler(scheduler fun) {
@@ -140,24 +144,16 @@ extern void lwp_set_scheduler(scheduler fun) {
    else 
    {
       sched = malloc(5 * sizeof(tid_t));
-#ifdef DEBUG
-      fprintf(stderr, "before admit\n");
-#endif
       sched->admit = r_admit;
-#ifdef DEBUG
-      fprintf(stderr, "before remove\n");
-#endif
       sched->remove = r_remove;
-#ifdef DEBUG
-      fprintf(stderr, "before next\n");
-#endif
       sched->next = r_next;
       sched->init = r_init;
       sched->shutdown = r_shutdown;
    }
-#ifdef DEBUG
-   fprintf(stderr, "end set sched\n");
-#endif
+/*
+   if (sched->init != NULL) {
+      sched->init();
+   }*/
 }
 
 extern scheduler lwp_get_scheduler(void) {
