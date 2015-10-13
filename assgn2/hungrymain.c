@@ -57,10 +57,8 @@ int main(int argc, char *argv[]){
 
   install_handler(SIGINT,  kill_snake);   /* SIGINT will kill a snake */
   install_handler(SIGQUIT, lwp_stop);    /* SIGQUIT will stop the system */
-//add sched
-  lwp_set_scheduler(NULL);
   start_windowing();            /* start up curses windowing */
-
+  lwp_set_scheduler(NULL);
   /* Initialize Snakes */
   cnt = 0;
   /* snake new_snake(int y, int x, int len, int dir, int color) ;*/
