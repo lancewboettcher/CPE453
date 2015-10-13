@@ -19,7 +19,7 @@ HUNGRYOBJS = hungrymain.o
 
 NUMOBJS    = numbersmain.o
 
-OBJS	= $(SNAKEOBJS) $(HUNGRYOBJS) $(NUMOBJS) 
+OBJS	= $(SNAKEOBJS) $(HUNGRYOBJS) $(NUMOBJS) liblwp.o 
 
 SRCS	= snakemain.c numbersmain.c
 
@@ -50,11 +50,13 @@ snakemain.o: lwp.h snakes.h
 
 numbermain.o: lwp.h
 
-libPLN.a: ../Publish/lwp.c
-	gcc -c ../Publish/lwp.c
-	ar r libPLN.a lwp.o
-	rm lwp.o
-
+liblwp.so: liblwp.o
+	gcc -Wall -g -fpic -c -o -d DEBUG liblwp.o magic64.S lwp.c
+	gcc -Wall -g -fpic -shared -o liblwp.so liblwp.o
+#libPLN.a: ../Publish/lwp.c
+#	gcc -c ../Publish/lwp.c
+#	ar r libPLN.a lwp.o
+#	rm lwp.o
 pub:
 	scp $(PUBFILES) $(TARGET)
 
