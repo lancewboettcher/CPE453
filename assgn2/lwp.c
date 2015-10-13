@@ -19,11 +19,8 @@ extern tid_t lwp_create(lwpfun function, void * args, size_t stackSize) {
 #endif
    char *stackPtr;
 
-   /* TODO: We might not need this */
    if (sched == NULL) {
      lwp_set_scheduler(NULL);
-     
-     sched->init();
    }
 
    thread newThread = malloc(sizeof(context));
@@ -108,6 +105,10 @@ extern void lwp_start(void) {
 #ifdef DEBUG
    fprintf(stderr, "start called\n");
 #endif
+   
+   if (sched == NULL) {
+     lwp_set_scheduler(NULL);
+   }
 
    /* Save old Context */ 
    save_context(&realContext);
@@ -115,7 +116,9 @@ extern void lwp_start(void) {
    curThread = sched->next();
    
    /* Load new context */ 
-   load_context(&(curThread->state));
+   if (curThread != NULL) {
+      load_context(&(curThread->state));
+   }
 #ifdef DEBUG
    if (curThread == NULL)
    fprintf(stderr, "curThread == NULL after start called\n");
@@ -128,10 +131,10 @@ extern void lwp_stop(void) {
    }
 
    load_context(&realContext);
-/*
+
    if (sched->shutdown != NULL) {
       sched->shutdown();
-   }*/
+   }
 }
 
 extern void lwp_set_scheduler(scheduler fun) {
@@ -150,10 +153,10 @@ extern void lwp_set_scheduler(scheduler fun) {
       sched->init = r_init;
       sched->shutdown = r_shutdown;
    }
-/*
+
    if (sched->init != NULL) {
       sched->init();
-   }*/
+   }
 }
 
 extern scheduler lwp_get_scheduler(void) {
