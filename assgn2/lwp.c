@@ -285,45 +285,27 @@ thread r_next() {
    if (numThreads < 1) {
       ret =  NULL;
    }
+   
    else if (numThreads == 1) {
       ret = &(threadHead->thread);
    }
+   
    else {
-      /* There are > 1 threads in the list */ 
-#ifdef DEBUG
-      fprintf(stderr, "NEXT: > 1 threads\n");
-#endif
+      /* More than 1 thread in the list */ 
 
-      struct threadNode *iterator = threadHead;
-#ifdef DEBUG
-      fprintf(stderr, "numthreads is %lu\n", numThreads);
-#endif
-      if (curThread == NULL) {
-#ifdef DEBUG
-         fprintf(stderr, "CURTHREAD = NULL\n");
-#endif
-         if (threadHead != NULL) { 
-#ifdef DEBUG
-            fprintf(stderr, "THREADEHAD != NULL\n");
-#endif
-         }
-         ret = &(threadHead->thread);
+      ret = &(threadHead->thread);
+      
+      /* Move threadHead to the back of the list */ 
+      
+      threadNode *iterator = threadHead;
+
+      while (iterator->next != NULL) {
+         iterator = iterator->next;
       }
-      else { 
-         /* find curThread's threadNode */ 
-         while (iterator != NULL && (iterator->thread).tid != curThread->tid) {
-            iterator = iterator->next;
-         }
+      iterator->next = threadHead;
 
-         if (iterator->next != NULL) {
-            ret = &(iterator->next->thread);
-         }
-         else {
-            /* Circle back to the beginning of the list */ 
-
-            ret = &(threadHead->thread);
-         }
-      }
+      threadHead = threadHead->next;
+      iterator->next->next = NULL;
    }
 
 #ifdef DEBUG
