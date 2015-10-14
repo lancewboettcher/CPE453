@@ -19,13 +19,13 @@ HUNGRYOBJS = hungrymain.o
 
 NUMOBJS    = numbersmain.o
 
-OBJS	= $(SNAKEOBJS) $(HUNGRYOBJS) $(NUMOBJS) liblwp.o 
+OBJS	= $(SNAKEOBJS) $(HUNGRYOBJS) $(NUMOBJS) liblwp.o malloc.o 
 
 SRCS	= snakemain.c numbersmain.c
 
 HDRS	= 
 
-EXTRACLEAN = core $(PROGS)
+EXTRACLEAN = core $(PROGS)i
 
 liblwp.so: clean
 	$(CC) $(CFLAGS) -g -fPIC -m64 -c lwp.c lwp.h
