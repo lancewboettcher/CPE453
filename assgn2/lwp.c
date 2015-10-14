@@ -246,20 +246,18 @@ void r_remove(thread victim) {
 
    if (threadHead == NULL || victim == NULL) {
       /* Empty list or NULL victim */ 
-
       return;
    }
 
+   /* traverse the scheduler list to find the victim */
    while (iterator != NULL && (iterator->thread).tid != victimId) {
-      /* Find the victim */ 
-
+      /* keep track of the previous node visited for linking purposes */
       prev = iterator;
       iterator = iterator->next;
    }
 
    if (iterator == NULL) {
       /* Didn't find the victim */
-
       return;
    }
 
@@ -269,6 +267,7 @@ void r_remove(thread victim) {
       threadHead = threadHead->next;  
    }
    else {
+      /* removed last node of the list, set end of list to prev node */
       if (iterator->next == NULL) {
          endOfList = prev;
       }
@@ -281,14 +280,14 @@ void r_remove(thread victim) {
 thread r_next() {
    thread ret;
 
+   /* if no threads left in scheduler, return NULL */
    if (numThreads < 1) {
       ret =  NULL;
    }
-   
+   /* if one thread left in list, return the threadHead */
    else if (numThreads == 1) {
       ret = &(threadHead->thread);
    }
-   
    else {
       /* More than 1 thread in the list */ 
 
