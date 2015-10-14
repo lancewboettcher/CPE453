@@ -1,8 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "lwp.h"
-//TODO: delete
-#include <stdint.h>
 #include <inttypes.h>
 static scheduler sched;
 
@@ -17,31 +15,36 @@ static tid_t numThreads = 0;                 /* Total number of threads      */
 static struct threadNode *endOfList;         /* Tail of the scheduler list   */
 
 extern tid_t lwp_create(lwpfun function, void * args, size_t stackSize) {
-#ifdef DEBUG
-#endif
-   fprintf(stderr, "lwp_create called\n");
    char *stackPtr;
 
    if (sched == NULL) {
      lwp_set_scheduler(NULL);
    }
-
-   thread newThread = malloc(sizeof(context));
-   newThread->stack = malloc(stackSize * sizeof(tid_t));
-   newThread->stacksize = stackSize;
-   newThread->tid = uniqueId++;
-
-   /* Setup stack */
-   stackPtr = (void *)(newThread->stack) + stackSize;
    
-   stackPtr -= sizeof(tid_t); /* only need to allocate size of one function */
-   stackPtr -= sizeof(tid_t); /* return address                             */
+   /* malloc size of thread context */
+   thread newThread = (thread)malloc(sizeof(context));
+
+   /* malloc size of stack */
+   newThread->stack = malloc(stackSize * sizeof(tid_t));
+   
+   /* Setup stack */
+   stackPtr = (char *)(newThread->stack) + sizeof(tid_t) * stackSize;
+   
+   /* return address */
+   stackPtr -= sizeof(tid_t);
    *((tid_t *)stackPtr) = (tid_t)lwp_exit;
-   stackPtr -= sizeof(lwpfun); /* function to call                           */
+   
+   /* function to call */
+   stackPtr -= sizeof(lwpfun);
    *((lwpfun *)stackPtr) = function;
 
-   stackPtr -= sizeof(lwpfun);
+   /* set up the stack pointer below the function so the function is the
+    * first thing popped off the stack */
+   stackPtr -= sizeof(tid_t);
  
+   /* set newThread fields */
+   newThread->stacksize = stackSize;
+   newThread->tid = uniqueId++;
    newThread->state.rbp = (tid_t)stackPtr;
    newThread->state.rsp = (tid_t)stackPtr;
    
@@ -49,30 +52,18 @@ extern tid_t lwp_create(lwpfun function, void * args, size_t stackSize) {
    newThread->state.rdi = (tid_t)args;
    sched->admit(newThread);
 
-   fprintf(stderr, "got after admit\n");
    return newThread->tid;
 }
 
 extern void lwp_exit(void) {
-#ifdef DEBUG
-   fprintf(stderr, "exit called\n");
-#endif
    /* save one context */
    thread toFree = curThread;
-  
-   //fprintf(stderr, "exit called on %lu\n", lwp_gettid());
+ 
+   /* remover thread from scheduler */
    if (toFree != NULL) {
-      //fprintf(stderr, 
-            //"Seg fault occurs here, ADDR 0x%" PRIXPTR "\n", 
-            //(uintptr_t)toFree);
-      fprintf(stderr, "seg fault occurs here\n");
-      if (sched->next() != NULL) {
-         fprintf(stderr, "next never gets here\n");
-         sched->remove(toFree);
-      }
-      fprintf(stderr, "and never gets here\n");
+     sched->remove(toFree);
    }
-
+   
    /* pick a thread to run */
    curThread = sched->next();
 
@@ -83,8 +74,8 @@ extern void lwp_exit(void) {
       /* load that thread's context */
       load_context(&(curThread->state));
    }
-   
-   /* free the old thread */
+
+   /* free resources */
    if (toFree != NULL) {
       free(toFree->stack);
       free(toFree);
@@ -92,32 +83,27 @@ extern void lwp_exit(void) {
 }
 
 extern tid_t lwp_gettid(void) {
-
    return curThread->tid;
-
 }
 
 extern void lwp_yield(void) {
-#ifdef DEBUG
-   fprintf(stderr, "yield called\n");
-#endif
-
+   /* save current context */
    save_context(&(curThread->state));
    
+   /* grab the next thread in the scheduler list */
    curThread = sched->next();
-
+   
+   /* if no threads left in scheduler, call lwp_exit() */
    if (curThread == NULL) {
       lwp_exit();
    }
 
+   /* load the new context */
    load_context(&(curThread->state));
 }
 
 extern void lwp_start(void) {
-#ifdef DEBUG
-   fprintf(stderr, "start called\n");
-#endif
-   
+   /* make sure the scheduler is set even if no threads were created */
    if (sched == NULL) {
      lwp_set_scheduler(NULL);
    }
@@ -125,61 +111,61 @@ extern void lwp_start(void) {
    /* Save old Context */ 
    save_context(&realContext);
 
+   /* grab the next thread in the scheduler list */
    curThread = sched->next();
    
    /* Load new context */ 
    if (curThread != NULL) {
       load_context(&(curThread->state));
    }
-#ifdef DEBUG
-   if (curThread == NULL)
-   fprintf(stderr, "curThread == NULL after start called\n");
-#endif
 }
 
 extern void lwp_stop(void) {
+   /* save the current thread's context */
    if (curThread != NULL) {
       save_context(&(curThread->state));
    }
 
+   /* shutdown the scheduler if the scheduler has a shutdown function */
    if (sched->shutdown != NULL) {
       sched->shutdown();
    }
    
+   /* restore the context to what it was before threads were called */
    load_context(&realContext);
 }
 
 extern void lwp_set_scheduler(scheduler fun) {
-#ifdef DEBUG
-   fprintf(stderr, "set sched called\n");
-#endif
    //TODO: clean up  
    if (sched != NULL && fun != NULL) {
       /* if scheduler is previously initialized, swictch scheduler */
       thread tempThread;
 
-      if (fun->init != NULL) {
-         fun->init();
-      }
-
+      /* grab all of the threads from the first scheduler and admit 
+       * it to the new one */
       while ((tempThread = sched->next())) {
          fun->admit(tempThread);
          sched->remove(tempThread);
       }
 
+      /* if the the scheduler has a shutdown function, shut it down */
       if (sched->shutdown) {
          sched->shutdown();
       }
-
+      
+      /* set the global sched variable to the new scheduler */
       sched = fun;
    }
    else {
+      /* if a scheduler function is provided, set the sched 
+       * variable to it */
       if (fun != NULL) {
-   fprintf(stderr, "set sched called\n");
          sched = fun;
       }
       else 
       {
+         /* no scheduler provided, malloc and use the scheduler
+          * we created */
          sched = malloc(5 * sizeof(tid_t));
          sched->admit = r_admit;
          sched->remove = r_remove;
@@ -188,9 +174,11 @@ extern void lwp_set_scheduler(scheduler fun) {
          sched->shutdown = r_shutdown;
       }
 
-      if (sched->init != NULL) {
-         sched->init();
-      }
+   }
+  
+   /* if the the scheduler has an init function, initialize it */
+   if (sched->init != NULL) {
+      sched->init();
    }
    
 }
@@ -200,7 +188,8 @@ extern scheduler lwp_get_scheduler(void) {
 }
 
 extern thread tid2thread(tid_t tid) {
-
+   /* iterate through the scheduler list and return the thread that 
+    * matched the tid */
    struct threadNode *iterator = threadHead;
    while (iterator != NULL && (iterator->thread).tid != tid) {
       iterator = iterator->next;
@@ -212,35 +201,37 @@ extern thread tid2thread(tid_t tid) {
 /* Scheduler Functions */ 
 
 void r_init() {
+   /* nothing to initialize */
 }
 
 void r_shutdown() {
+   /* nothing to shut down */
 }
 
 void r_admit(thread new) {
-#ifdef DEBUG
-   fprintf(stderr, "admit called\n");
-#endif
    struct threadNode *iterator;
 
    if (threadHead == NULL) {
-      /* First time calling admit. Empty list. */
+      /* First time calling admit (list is empty). Initialize list nodes 
+       * and set values to thread */
       threadHead = malloc(sizeof(struct threadNode));
       threadHead->thread = *new;
       threadHead->next = NULL; 
 
+      /* only one node in the list, end of list points to the threadHead */
       endOfList = threadHead;
    }
 
    else {
       /* Existing thread list. Add to it */
-      
       iterator = threadHead;
-
+      
+      /* create a node for the thread to add to the list */
       struct threadNode *newNode = malloc(sizeof(struct threadNode));
       newNode->thread = *new;
       newNode->next = NULL;
       
+      /* set the endOfList point to the end of the list for efficiency */
       endOfList->next = newNode;
       endOfList = newNode;
    }
@@ -249,10 +240,6 @@ void r_admit(thread new) {
 }
 
 void r_remove(thread victim) {
-
-#ifdef DEBUG
-   fprintf(stderr, "r_remove called\n");
-#endif
    struct threadNode *iterator = threadHead;
    struct threadNode *prev = NULL;
    tid_t victimId = victim->tid;
@@ -286,17 +273,12 @@ void r_remove(thread victim) {
          endOfList = prev;
       }
       prev->next = iterator->next;
-
-   
    }
-
+   
    numThreads--;
 }
 
 thread r_next() {
-#ifdef DEBUG
-   fprintf(stderr, "next is called\n");
-#endif
    thread ret;
 
    if (numThreads < 1) {
