@@ -59,18 +59,6 @@ typedef struct scheduler {
   thread (*next)();                /* select a thread to schedule   */
 } *scheduler;
 
-struct threadNode {
-   context thread;
-   struct threadNode *next;
-};
-
-/* Scheduler Function Prototypes */
-void r_init();
-void r_shutdown();
-void r_admit(thread new);
-void r_remove(thread victim);
-thread r_next();
-
 /* lwp functions */
 extern tid_t lwp_create(lwpfun,void *,size_t);
 extern void  lwp_exit(void);

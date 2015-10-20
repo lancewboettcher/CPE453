@@ -1,7 +1,16 @@
+/*
+ * LWP 
+ * CPE 453 Assignment 2
+ *
+ * Lance Boettcher (lboettch)
+ * Christina Sardo (csardo)
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include "lwp.h"
 #include <inttypes.h>
+
 static scheduler sched;
 
 /* LWP Variables */
@@ -9,10 +18,23 @@ static thread curThread;       /* Current thread executing                   */
 static rfile realContext;      /* rfile of the process when start is called  */
 static unsigned long uniqueId = 0;
 
+/* Struct for linked list of threads */ 
+struct threadNode {
+   context thread;
+   struct threadNode *next;
+};
+
 /* Scheduler Variables */
 static struct threadNode *threadHead;        /* Head of the scheduler list   */
 static tid_t numThreads = 0;                 /* Total number of threads      */
 static struct threadNode *endOfList;         /* Tail of the scheduler list   */
+
+/* Scheduler Function Prototypes */
+void r_init();
+void r_shutdown();
+void r_admit(thread new);
+void r_remove(thread victim);
+thread r_next();
 
 extern tid_t lwp_create(lwpfun function, void * args, size_t stackSize) {
    char *stackPtr;
@@ -136,7 +158,6 @@ extern void lwp_stop(void) {
 }
 
 extern void lwp_set_scheduler(scheduler fun) {
-   //TODO: clean up  
    if (sched != NULL && fun != NULL) {
       /* if scheduler is previously initialized, swictch scheduler */
       thread tempThread;
