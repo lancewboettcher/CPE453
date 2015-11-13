@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <minix/ds.h>
 #include "secretkeeper.h"
+#include <minix/const.h> 
+#include <sys/ucred.h>
 
 #define MESSAGE_SIZE 8192
 #define NO_OWNER -1 
@@ -25,6 +27,10 @@ FORWARD _PROTOTYPE( void sef_local_startup, (void) );
 FORWARD _PROTOTYPE( int sef_cb_init, (int type, sef_init_info_t *info) );
 FORWARD _PROTOTYPE( int sef_cb_lu_state_save, (int) );
 FORWARD _PROTOTYPE( int lu_state_restore, (void) );
+
+/* Secret Prototypes */ 
+void clearSecret();
+void initSecret();
 
 /* Entry points to the hello driver. */
 PRIVATE struct driver hello_tab =
@@ -68,7 +74,8 @@ PRIVATE int hello_open(d, m)
 {
     printf("hello_open(). Called %d time(s).\n", ++open_counter);
 
-    struct ucred callerCreds; 
+    ucred callerCreds; 
+    int openFlags;
 
     /* Get the caller's credentials */ 
     if (getnucred(m->USER_ENDPT, &callerCreds)) {
@@ -76,16 +83,58 @@ PRIVATE int hello_open(d, m)
         exit(-1); /* TODO is this right? */
     }   
 
+    /* Get the flags given to open() */ 
+    openFlags = m->COUNT;
+
+    /* Check to make sure open() flags are either read or write, not both */ 
+    if (openFlags != O_WRONLY || openFlags != O_RDONLY) {
+        fprintf(stderr, "Unknown or unsuppported open() flags. Got '%d'\n",
+                openFlags);
+        return EACCES;
+    }  
+
     if (secretEmpty) {
-        /* New Owner */ 
-
-
+        secretOwner = callerCreds.uid;
+        secretNumFileDescriptors++;
+        
+        if (openFlags == O_RDONLY) {
+            /* Empty secret opened to read. Writing not allowed */  
+            printf("Empty secret opened in RD_ONLY\n");  
+        
+        }
+        else {
+            /* WR_ONLY. */ 
+            printf("Opening an empty secret for writing \n");
+        }    
     }
 
     else {
-        /* Secret Full. No writing. Owner process can read */ 
+        /* Secret Full. No writing. Owner process can read */
 
+        if (openFlags == O_RDONLY) {
+            if (secretOwner == callerCreds.uid) {
+                /* The owner of the secret is trying to read it - Allowed */ 
+                
+                secretNumFileDescriptors++;
+
+                /* The secret has been read. Now empty */ 
+        /*        secretEmpty = 1;
+                secretOwner = NO_OWNER;*/
+            }   
+            else {
+                fprintf(stderr, "%d is not the secret owner.Permission denied\n",
+                       callerCreds.uid);
+                return EACCES;
+            }   
+        } 
+        else {
+            /* WR_ONLY --> error */
+            fprintf(stderr, "Cannot open a full secret for writing\n"); 
+            return ENOSPC;
+        }     
     }
+
+    printf("%d file descriptors\n", secretNumFileDescriptors); 
 
     return OK;
 }
@@ -95,6 +144,13 @@ PRIVATE int hello_close(d, m)
     message *m;
 {
     printf("hello_close()\n");
+
+    if (--secretNumFileDescriptors++ == 0) {
+        clearSecret();
+    }    
+    
+    printf("%d file descriptors\n", secretNumFileDescriptors);
+
     return OK;
 }
 
@@ -224,17 +280,22 @@ PRIVATE int sef_cb_init(int type, sef_init_info_t *info)
     return OK;
 }
 
-void initSecret() {
-    int i;
-
-    secretOwner = NO_OWNER;
+void clearSecret() {
+    int i;  
+    
     secretEmpty = 1;
-    secretNumFileDescriptors = 0;
+    secretOwner = NO_OWNER;
 
     /* Initialize the message to be empty */ 
     for (i = 0; i < MESSAGE_SIZE; i++) {
         secretMessage[i] = NULL;
-    }   
+    }
+}
+
+void initSecret() {
+    secretNumFileDescriptors = 0;
+
+    clearSecret();
 }
 
 PUBLIC int main(int argc, char **argv)
