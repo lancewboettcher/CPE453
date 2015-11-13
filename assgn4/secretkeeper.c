@@ -6,6 +6,13 @@
 #include "secretkeeper.h"
 #include <minix/const.h> 
 #include <sys/ucred.h>
+#include <minix/endpoint.h>
+#include <sys/select.h>
+#include <minix/const.h>
+
+#define O_WRONLY 2
+#define O_RDONLY 4
+#define O_RDWR 6   
 
 #define MESSAGE_SIZE 8192
 #define NO_OWNER -1 
@@ -72,13 +79,15 @@ PRIVATE int hello_open(d, m)
     struct driver *d;
     message *m;
 {
-    printf("hello_open(). Called %d time(s).\n", ++open_counter);
-
-    ucred callerCreds; 
+ /*  printf("hello_open(). Called %d time(s).\n", ++open_counter);
+*/
+    struct ucred callerCreds; 
     int openFlags;
 
     /* Get the caller's credentials */ 
-    if (getnucred(m->USER_ENDPT, &callerCreds)) {
+ /*   if (getnucred(m->PROC_NR, &callerCreds)) {
+*/
+    if (getnucred(-1, &callerCreds)) {
         fprintf(stderr, "Open: getnucred error \n");
         exit(-1); /* TODO is this right? */
     }   
@@ -145,7 +154,7 @@ PRIVATE int hello_close(d, m)
 {
     printf("hello_close()\n");
 
-    if (--secretNumFileDescriptors++ == 0) {
+    if (--secretNumFileDescriptors == 0) {
         clearSecret();
     }    
     
@@ -288,7 +297,7 @@ void clearSecret() {
 
     /* Initialize the message to be empty */ 
     for (i = 0; i < MESSAGE_SIZE; i++) {
-        secretMessage[i] = NULL;
+        secretMessage[i] = '\0';
     }
 }
 
