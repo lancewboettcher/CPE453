@@ -10,6 +10,8 @@
 #include <sys/select.h>
 #include <minix/const.h>
 
+#include <unistd.h>
+
 #define O_WRONLY 2
 #define O_RDONLY 4
 #define O_RDWR 6   
@@ -83,27 +85,29 @@ PRIVATE int hello_open(d, m)
 */
     struct ucred callerCreds; 
     int openFlags;
+    uid_t uid = getuid();
+
+    printf("Open CALLED\n");
 
     /* Get the caller's credentials */ 
  /*   if (getnucred(m->PROC_NR, &callerCreds)) {
-*/
     if (getnucred(-1, &callerCreds)) {
         fprintf(stderr, "Open: getnucred error \n");
-        exit(-1); /* TODO is this right? */
+        exit(-1);
     }   
-
+*/
     /* Get the flags given to open() */ 
     openFlags = m->COUNT;
-
+    printf("Open Flags: %d\n", openFlags);
     /* Check to make sure open() flags are either read or write, not both */ 
-    if (openFlags != O_WRONLY || openFlags != O_RDONLY) {
+    if (openFlags != O_WRONLY && openFlags != O_RDONLY) {
         fprintf(stderr, "Unknown or unsuppported open() flags. Got '%d'\n",
                 openFlags);
         return EACCES;
     }  
-
+    
     if (secretEmpty) {
-        secretOwner = callerCreds.uid;
+        secretOwner = uid;
         secretNumFileDescriptors++;
         
         if (openFlags == O_RDONLY) {
@@ -116,14 +120,13 @@ PRIVATE int hello_open(d, m)
             printf("Opening an empty secret for writing \n");
         }    
     }
-
     else {
         /* Secret Full. No writing. Owner process can read */
 
         if (openFlags == O_RDONLY) {
-            if (secretOwner == callerCreds.uid) {
+            if (secretOwner == uid) {
                 /* The owner of the secret is trying to read it - Allowed */ 
-                
+                printf("CCCCCCC \n");
                 secretNumFileDescriptors++;
 
                 /* The secret has been read. Now empty */ 
@@ -132,7 +135,7 @@ PRIVATE int hello_open(d, m)
             }   
             else {
                 fprintf(stderr, "%d is not the secret owner.Permission denied\n",
-                       callerCreds.uid);
+                       uid);
                 return EACCES;
             }   
         } 
@@ -264,7 +267,7 @@ PRIVATE int sef_cb_init(int type, sef_init_info_t *info)
     open_counter = 0;
     switch(type) {
         case SEF_INIT_FRESH:
-            printf("hereeeeee");
+            printf("Hey, Im initing FRESH\n");
         break;
 
         case SEF_INIT_LU:
