@@ -10,6 +10,7 @@
 #include <sys/select.h>
 #include <minix/const.h>
 
+#include <sys/ioc_secret.h>
 #include <unistd.h>
 
 #define O_WRONLY 2
@@ -26,10 +27,13 @@ FORWARD _PROTOTYPE( char * hello_name,   (void) );
 FORWARD _PROTOTYPE( int hello_open,      (struct driver *d, message *m) );
 FORWARD _PROTOTYPE( int hello_close,     (struct driver *d, message *m) );
 FORWARD _PROTOTYPE( struct device * hello_prepare, (int device) );
-FORWARD _PROTOTYPE( int hello_transfer,  (int procnr, int opcode,
+FORWARD _PROTOTYPE( int hello_transfer,  (endpoint_t endpt, int opcode,
                                           u64_t position, iovec_t *iov,
-                                          unsigned nr_req) );
+                                          unsigned nr_req,
+                                          endpoint_t user_endpt));
 FORWARD _PROTOTYPE( void hello_geometry, (struct partition *entry) );
+
+FORWARD _PROTOTYPE( int hello_ioctl,      (struct driver *d, message *m) );
 
 /* SEF functions and variables. */
 FORWARD _PROTOTYPE( void sef_local_startup, (void) );
@@ -81,21 +85,17 @@ PRIVATE int hello_open(d, m)
     struct driver *d;
     message *m;
 {
- /*  printf("hello_open(). Called %d time(s).\n", ++open_counter);
-*/
     struct ucred callerCreds; 
     int openFlags;
-    uid_t uid = getuid();
 
-    printf("Open CALLED\n");
+    printf("hello_open() called\n");
 
     /* Get the caller's credentials */ 
- /*   if (getnucred(m->PROC_NR, &callerCreds)) {
-    if (getnucred(-1, &callerCreds)) {
+    if (getnucred(m->IO_ENDPT, &callerCreds)) {
         fprintf(stderr, "Open: getnucred error \n");
         exit(-1);
     }   
-*/
+    
     /* Get the flags given to open() */ 
     openFlags = m->COUNT;
     printf("Open Flags: %d\n", openFlags);
@@ -107,7 +107,7 @@ PRIVATE int hello_open(d, m)
     }  
     
     if (secretEmpty) {
-        secretOwner = uid;
+        secretOwner = callerCreds.uid;
         secretNumFileDescriptors++;
         
         if (openFlags == O_RDONLY) {
@@ -117,14 +117,14 @@ PRIVATE int hello_open(d, m)
         }
         else {
             /* WR_ONLY. */ 
-            printf("Opening an empty secret for writing \n");
+            printf("OpEning an empty secret for writing \n");
         }    
     }
     else {
         /* Secret Full. No writing. Owner process can read */
 
         if (openFlags == O_RDONLY) {
-            if (secretOwner == uid) {
+            if (secretOwner == callerCreds.uid) {
                 /* The owner of the secret is trying to read it - Allowed */ 
                 printf("CCCCCCC \n");
                 secretNumFileDescriptors++;
@@ -135,7 +135,7 @@ PRIVATE int hello_open(d, m)
             }   
             else {
                 fprintf(stderr, "%d is not the secret owner.Permission denied\n",
-                       uid);
+                       callerCreds.uid);
                 return EACCES;
             }   
         } 
@@ -176,36 +176,91 @@ PRIVATE struct device * hello_prepare(dev)
     return &hello_device;
 }
 
-PRIVATE int hello_transfer(proc_nr, opcode, position, iov, nr_req)
-    int proc_nr;
-    int opcode;
-    u64_t position;
-    iovec_t *iov;
-    unsigned nr_req;
+PRIVATE int hello_transfer(endpt, opcode, position, iov, nr_req, user_endpt)
+    endpoint_t endpt;  
+    int opcode;             /* DEV_GATHER_S or DEV_SCATTER_S            */
+    u64_t position;         /* offset on device to read or write        */ 
+    iovec_t *iov;           /* pointer to read or write request vector  */
+    unsigned nr_req;        /* length of request vector                 */
+    endpoint_t user_endpt;
 {
     int bytes, ret;
 
     printf("hello_transfer()\n");
 
-    bytes = strlen(HELLO_MESSAGE) - position.lo < iov->iov_size ?
-            strlen(HELLO_MESSAGE) - position.lo : iov->iov_size;
+<<<<<<< HEAD
+<<<<<<< HEAD
+=======
+    bytes = MESSAGE_SIZE - position.lo < iov->iov_size ?
+            MESSAGE_SIZE - position.lo : iov->iov_size;
+>>>>>>> origin/master
+=======
+    bytes = MESSAGE_SIZE - position.lo < iov->iov_size ?
+            MESSAGE_SIZE - position.lo : iov->iov_size;
+>>>>>>> origin/master
 
-    if (bytes <= 0)
-    {
-        return OK;
-    }
     switch (opcode)
     {
         case DEV_GATHER_S:
+<<<<<<< HEAD
+<<<<<<< HEAD
+            /* Reading */ 
+            bytes = strlen(secretMessage) - position.lo < iov->iov_size ?
+                    strlen(secretMessage) - position.lo : iov->iov_size;
+
+            if (bytes <= 0) {
+                return OK;
+            }
+
             ret = sys_safecopyto(proc_nr, iov->iov_addr, 0,
-                                (vir_bytes) (HELLO_MESSAGE + position.lo),
+=======
+            /* Write Section */
+            /* copy from own address space into a grant */
+            ret = sys_safecopyto(endpt, iov->iov_addr, 0,
+>>>>>>> origin/master
+=======
+            /* Write Section */
+            /* copy from own address space into a grant */
+            ret = sys_safecopyto(endpt, iov->iov_addr, 0,
+>>>>>>> origin/master
+                                (vir_bytes) (secretMessage + position.lo),
                                  bytes, D);
             iov->iov_size -= bytes;
-            break;
 
+            break;
+<<<<<<< HEAD
+
+        case DEV_SCATTER_S: 
+            /* Writing */ 
+    
+            /* If IO buffer size and current message bigger than max size */  
+            if (strlen(secretMessage) + iov->iov_size > MESSAGE_SIZE) {
+                return ENOSPC;
+            }
+            else {
+                /* Message fits */ 
+                bytes = iov->iov_size;
+            
+                ret = sys_safecopyfrom(proc_nr, iov->iov_addr, 0,
+                                    (vir_bytes) (secretMessage + strlen(secretMessage)),
+                                     bytes, D);    
+            }
+            break;
+=======
+>>>>>>> origin/master
+        case DEV_SCATTER_S:
+              /* Read Section */
+              /* Copy from a grant into own address space */
+              ret = sys_safecopyfrom(endpt, (cp_grant_id_t) iov->iov_addr, 0,
+                                (vir_bytes) (secretMessage + position.lo),
+                                bytes, D);
+              iov->iov_size +=bytes;
+              break;
         default:
+              fprintf(stderr, "Invalid opcode entered\n");
             return EINVAL;
     }
+    /*iov->iov_size -= bytes;*/
     return ret;
 }
 
@@ -217,6 +272,39 @@ PRIVATE void hello_geometry(entry)
     entry->heads     = 0;
     entry->sectors   = 0;
 }
+
+PRIVATE int hello_ioctl(d, m)
+    struct driver *d;
+    message *m;
+{
+    /*  
+    printf("hello_ioctl() called \n"); 
+*/
+    struct ucred callerCreds;
+    uid_t grantee;
+    int res;
+
+    /* SSGRANT is the only supported ioctl call */ 
+    if (m->REQUEST != SSGRANT) {
+        return ENOTTY;
+    }    
+
+    /* Get the UID */
+    if (getnucred(m->IO_ENDPT, &callerCreds)) {
+        fprintf(stderr, "Open: getnucred error \n");
+        exit(-1);
+    }
+
+    /* Get the grantee */     
+    res = sys_safecopyfrom(m->IO_ENDPT, (vir_bytes)m->IO_GRANT, 0, 
+            (vir_bytes)&grantee, sizeof(grantee), D);
+
+    if (callerCreds.uid == secretOwner) {
+        secretOwner = grantee;
+    }  
+
+    return OK;    
+}    
 
 PRIVATE int sef_cb_lu_state_save(int state) {
 /* Save the state. */
