@@ -73,6 +73,7 @@ static int secretNumFileDescriptors;
 
 static int transferCalls = 0;
 static int openRead = 0;
+static int secretRead = 1; 
 
 /** State variable to count the number of times the device has been opened. */
 PRIVATE int open_counter;
@@ -160,7 +161,7 @@ PRIVATE int hello_close(d, m)
 {
     printf("hello_close()\n");
 
-    if (--secretNumFileDescriptors == 0) {
+    if (secretRead && !secretEmpty) {
         clearSecret();
     }    
     
@@ -188,13 +189,7 @@ PRIVATE int hello_transfer(proc_nr, opcode, position, iov, nr_req)
 {
     int bytes, ret;
 
-    if (transferCalls >= 1) {
-        return 0;  
-    }
-
     printf("hello_transfer() called %d times\n", ++transferCalls);
-
-
 
     switch (opcode)
     {
@@ -210,17 +205,17 @@ PRIVATE int hello_transfer(proc_nr, opcode, position, iov, nr_req)
             }
 
             ret = sys_safecopyto(proc_nr, iov->iov_addr, 0,
-                                (vir_bytes) (secretMessage + position.lo),
+                                (vir_bytes) secretMessage,
                                  bytes, D);
             iov->iov_size -= bytes;
+
+            secretRead = 1;
 
             break;
 
         case DEV_SCATTER_S: 
             /* Writing */ 
         
-            secretNumFileDescriptors++;
-
             printf("Hello transfer writing \n");
             
             /* If IO buffer size and current message bigger than max size */  
@@ -234,10 +229,11 @@ PRIVATE int hello_transfer(proc_nr, opcode, position, iov, nr_req)
                 printf("Transfer bytes: %d, strlen: %d \n", bytes, strlen(secretMessage)); 
 
                 ret = sys_safecopyfrom(proc_nr, iov->iov_addr, 0,
-                                    (vir_bytes) (secretMessage + strlen(secretMessage)),
+                                    (vir_bytes) secretMessage,
                                      bytes, D);    
 
                 secretEmpty = 0;
+                secretRead = 0;
 
                 printf("transfer Secret Message: '%s'\n", secretMessage);
             }
