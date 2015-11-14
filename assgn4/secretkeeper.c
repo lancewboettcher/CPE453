@@ -26,9 +26,10 @@ FORWARD _PROTOTYPE( char * hello_name,   (void) );
 FORWARD _PROTOTYPE( int hello_open,      (struct driver *d, message *m) );
 FORWARD _PROTOTYPE( int hello_close,     (struct driver *d, message *m) );
 FORWARD _PROTOTYPE( struct device * hello_prepare, (int device) );
-FORWARD _PROTOTYPE( int hello_transfer,  (int procnr, int opcode,
+FORWARD _PROTOTYPE( int hello_transfer,  (endpoint_t endpt, int opcode,
                                           u64_t position, iovec_t *iov,
-                                          unsigned nr_req) );
+                                          unsigned nr_req,
+                                          endpoint_t user_endpt));
 FORWARD _PROTOTYPE( void hello_geometry, (struct partition *entry) );
 
 /* SEF functions and variables. */
@@ -117,7 +118,7 @@ PRIVATE int hello_open(d, m)
         }
         else {
             /* WR_ONLY. */ 
-            printf("Opening an empty secret for writing \n");
+            printf("OpEning an empty secret for writing \n");
         }    
     }
     else {
@@ -176,19 +177,20 @@ PRIVATE struct device * hello_prepare(dev)
     return &hello_device;
 }
 
-PRIVATE int hello_transfer(proc_nr, opcode, position, iov, nr_req)
-    int proc_nr;
-    int opcode;
-    u64_t position;
-    iovec_t *iov;
-    unsigned nr_req;
+PRIVATE int hello_transfer(endpt, opcode, position, iov, nr_req, user_endpt)
+    endpoint_t endpt;  
+    int opcode;             /* DEV_GATHER_S or DEV_SCATTER_S            */
+    u64_t position;         /* offset on device to read or write        */ 
+    iovec_t *iov;           /* pointer to read or write request vector  */
+    unsigned nr_req;        /* length of request vector                 */
+    endpoint_t user_endpt;
 {
     int bytes, ret;
 
     printf("hello_transfer()\n");
 
-    bytes = strlen(HELLO_MESSAGE) - position.lo < iov->iov_size ?
-            strlen(HELLO_MESSAGE) - position.lo : iov->iov_size;
+    bytes = MESSAGE_SIZE - position.lo < iov->iov_size ?
+            MESSAGE_SIZE - position.lo : iov->iov_size;
 
     if (bytes <= 0)
     {
@@ -197,15 +199,26 @@ PRIVATE int hello_transfer(proc_nr, opcode, position, iov, nr_req)
     switch (opcode)
     {
         case DEV_GATHER_S:
-            ret = sys_safecopyto(proc_nr, iov->iov_addr, 0,
-                                (vir_bytes) (HELLO_MESSAGE + position.lo),
+            /* Write Section */
+            /* copy from own address space into a grant */
+            ret = sys_safecopyto(endpt, iov->iov_addr, 0,
+                                (vir_bytes) (secretMessage + position.lo),
                                  bytes, D);
             iov->iov_size -= bytes;
             break;
-
+        case DEV_SCATTER_S:
+              /* Read Section */
+              /* Copy from a grant into own address space */
+              ret = sys_safecopyfrom(endpt, (cp_grant_id_t) iov->iov_addr, 0,
+                                (vir_bytes) (secretMessage + position.lo),
+                                bytes, D);
+              iov->iov_size +=bytes;
+              break;
         default:
+              fprintf(stderr, "Invalid opcode entered\n");
             return EINVAL;
     }
+    /*iov->iov_size -= bytes;*/
     return ret;
 }
 
