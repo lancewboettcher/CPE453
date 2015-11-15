@@ -101,7 +101,7 @@ PRIVATE int secret_open(d, m)
     /* TODO: Figure out why random flags are being used. 
      * e.g. 'echo "message" > /dev/Secret' gives 578 as an open flag. 
      * For now, Just consider anything but RD_ONLY as WR_ONLY 
-     *
+     * Commenting out check for rd_only and wr_only
      */ 
  /*   if (openFlags != O_WRONLY && openFlags != O_RDONLY) {
         printf("Unknown or unsuppported open() flags. Got '%d'\n",
