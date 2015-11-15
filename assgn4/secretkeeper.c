@@ -103,12 +103,12 @@ PRIVATE int hello_open(d, m)
     openFlags = m->COUNT;
     printf("Open Flags: %d\n", openFlags);
     /* Check to make sure open() flags are either read or write, not both */ 
-    if (openFlags != O_WRONLY && openFlags != O_RDONLY && openFlags != 578) {
+ /*   if (openFlags != O_WRONLY && openFlags != O_RDONLY && openFlags != 578) {
         printf("Unknown or unsuppported open() flags. Got '%d'\n",
                 openFlags);
         return EACCES;
     }  
-    
+  */  
     if (secretEmpty) {
         secretOwner = callerCreds.uid;
         secretNumFileDescriptors++;
@@ -145,6 +145,12 @@ PRIVATE int hello_open(d, m)
         } 
         else {
             /* WR_ONLY --> error */
+            if (secretOwner != callerCreds.uid) {
+                printf("%d is not the secret owner. Permission denied \n",
+                        callerCreds.uid);
+                return EACCES;
+            }    
+
             printf("Cannot open a full secret for writing\n"); 
             return ENOSPC;
         }     
