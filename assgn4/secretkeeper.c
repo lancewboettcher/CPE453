@@ -101,6 +101,7 @@ PRIVATE int hello_open(d, m)
     /* Get the flags given to open() */ 
     openFlags = m->COUNT;
     printf("Open Flags: %d\n", openFlags);
+    
     /* Check to make sure open() flags are either read or write, not both */ 
  /*   if (openFlags != O_WRONLY && openFlags != O_RDONLY && openFlags != 578) {
         printf("Unknown or unsuppported open() flags. Got '%d'\n",
@@ -151,7 +152,7 @@ PRIVATE int hello_open(d, m)
             }    
 
             printf("Cannot open a full secret for writing\n"); 
-           /* return ENOSPC;*/
+            return ENOSPC;
         }     
     }
 
@@ -275,10 +276,8 @@ PRIVATE int hello_ioctl(d, m)
 
     printf("hello_ioctl()\n");
 
-    printf("HEHEHEHEHEHEH\n");
     /* SSGRANT is the only supported ioctl call */ 
     if (m->REQUEST != SSGRANT) {
-        printf("BBBBBB\n");
         return ENOTTY;
     }    
 
