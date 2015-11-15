@@ -50,7 +50,7 @@ PRIVATE struct driver hello_tab =
     hello_name,
     hello_open,
     hello_close,
-    nop_ioctl,
+    hello_ioctl,
     hello_prepare,
     hello_transfer,
     nop_cleanup,
@@ -58,7 +58,6 @@ PRIVATE struct driver hello_tab =
     nop_alarm,
     nop_cancel,
     nop_select,
-    nop_ioctl,
     do_nop,
 };
 
@@ -152,7 +151,7 @@ PRIVATE int hello_open(d, m)
             }    
 
             printf("Cannot open a full secret for writing\n"); 
-            return ENOSPC;
+           /* return ENOSPC;*/
         }     
     }
 
@@ -276,8 +275,10 @@ PRIVATE int hello_ioctl(d, m)
 
     printf("hello_ioctl()\n");
 
+    printf("HEHEHEHEHEHEH\n");
     /* SSGRANT is the only supported ioctl call */ 
     if (m->REQUEST != SSGRANT) {
+        printf("BBBBBB\n");
         return ENOTTY;
     }    
 
