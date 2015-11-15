@@ -23,16 +23,16 @@
 /*
  * Function prototypes for the hello driver.
  */
-FORWARD _PROTOTYPE( char * hello_name,   (void) );
-FORWARD _PROTOTYPE( int hello_open,      (struct driver *d, message *m) );
-FORWARD _PROTOTYPE( int hello_close,     (struct driver *d, message *m) );
-FORWARD _PROTOTYPE( struct device * hello_prepare, (int device) );
-FORWARD _PROTOTYPE( int hello_transfer,  (int procnr, int opcode,
+FORWARD _PROTOTYPE( char * secret_name,   (void) );
+FORWARD _PROTOTYPE( int secret_open,      (struct driver *d, message *m) );
+FORWARD _PROTOTYPE( int secret_close,     (struct driver *d, message *m) );
+FORWARD _PROTOTYPE( struct device * secret_prepare, (int device) );
+FORWARD _PROTOTYPE( int secret_transfer,  (int procnr, int opcode,
                                           u64_t position, iovec_t *iov,
                                           unsigned nr_req) );
-FORWARD _PROTOTYPE( void hello_geometry, (struct partition *entry) );
+FORWARD _PROTOTYPE( void secret_geometry, (struct partition *entry) );
 
-FORWARD _PROTOTYPE( int hello_ioctl,      (struct driver *d, message *m) );
+FORWARD _PROTOTYPE( int secret_ioctl,      (struct driver *d, message *m) );
 
 /* SEF functions and variables. */
 FORWARD _PROTOTYPE( void sef_local_startup, (void) );
@@ -42,55 +42,51 @@ FORWARD _PROTOTYPE( int lu_state_restore, (void) );
 
 /* Secret Prototypes */ 
 void clearSecret();
-void initSecret();
 
 /* Entry points to the hello driver. */
-PRIVATE struct driver hello_tab =
+PRIVATE struct driver secret_tab =
 {
-    hello_name,
-    hello_open,
-    hello_close,
-    hello_ioctl,
-    hello_prepare,
-    hello_transfer,
+    secret_name,
+    secret_open,
+    secret_close,
+    secret_ioctl,
+    secret_prepare,
+    secret_transfer,
     nop_cleanup,
-    hello_geometry,
+    secret_geometry,
     nop_alarm,
     nop_cancel,
     nop_select,
     do_nop,
 };
 
-/** Represents the /dev/hello device. */
-PRIVATE struct device hello_device;
+/** Represents the /dev/Secret device. */
+PRIVATE struct device secret_device;
 
 /* Secret global variables */
 static uid_t secretOwner;
 static char secretMessage[MESSAGE_SIZE]; 
 static int secretEmpty;
-static int secretNumFileDescriptors;
 
-static int transferCalls = 0;
-static int openRead = 0;
 static int secretRead = 1; 
 
 /** State variable to count the number of times the device has been opened. */
 PRIVATE int open_counter;
 
-PRIVATE char * hello_name(void)
+PRIVATE char * secret_name(void)
 {
-    printf("hello_name()\n");
+    printf("secret_name()\n");
     return "hello";
 }
 
-PRIVATE int hello_open(d, m)
+PRIVATE int secret_open(d, m)
     struct driver *d;
     message *m;
 {
     struct ucred callerCreds; 
     int openFlags;
 
-    printf("hello_open() called\n");
+    printf("secret_open() called\n");
 
     /* Get the caller's credentials */ 
     if (getnucred(m->IO_ENDPT, &callerCreds)) {
@@ -102,8 +98,12 @@ PRIVATE int hello_open(d, m)
     openFlags = m->COUNT;
     printf("Open Flags: %d\n", openFlags);
     
-    /* Check to make sure open() flags are either read or write, not both */ 
- /*   if (openFlags != O_WRONLY && openFlags != O_RDONLY && openFlags != 578) {
+    /* TODO: Figure out why random flags are being used. 
+     * e.g. 'echo "message" > /dev/Secret' gives 578 as an open flag. 
+     * For now, Just consider anything but RD_ONLY as WR_ONLY 
+     *
+     */ 
+ /*   if (openFlags != O_WRONLY && openFlags != O_RDONLY) {
         printf("Unknown or unsuppported open() flags. Got '%d'\n",
                 openFlags);
         return EACCES;
@@ -111,7 +111,6 @@ PRIVATE int hello_open(d, m)
   */  
     if (secretEmpty) {
         secretOwner = callerCreds.uid;
-        secretNumFileDescriptors++;
         
         if (openFlags == O_RDONLY) {
             /* Empty secret opened to read. Writing not allowed */  
@@ -127,17 +126,14 @@ PRIVATE int hello_open(d, m)
         /* Secret Full. No writing. Owner process can read */
 
         if (openFlags == O_RDONLY) {
+            /* Full secret opened in Read only */ 
+
             if (secretOwner == callerCreds.uid) {
                 /* The owner of the secret is trying to read it - Allowed */ 
                 printf("Full secret opened in rd_ONLY\n");
-
-                secretNumFileDescriptors++;
-
-                /* The secret has been read. Now empty */ 
-        /*        secretEmpty = 1;
-                secretOwner = NO_OWNER;*/
             }   
             else {
+                /* Someone else trying to read the secret - Denied */ 
                 printf("%d is not the secret owner.Permission denied\n",
                        callerCreds.uid);
                 return EACCES;
@@ -146,47 +142,49 @@ PRIVATE int hello_open(d, m)
         else {
             /* WR_ONLY --> error */
             if (secretOwner != callerCreds.uid) {
+                /* Someone else is trying to read the secret - Denied */
                 printf("%d is not the secret owner. Permission denied \n",
                         callerCreds.uid);
                 return EACCES;
             }    
-
-            printf("Cannot open a full secret for writing\n"); 
-            return ENOSPC;
+            else {
+                /* Even though you own the secret, its full - Denied */ 
+                printf("Cannot open a full secret for writing\n"); 
+                return ENOSPC;
+            }    
         }     
     }
-
-    printf("%d file descriptors\n", secretNumFileDescriptors); 
 
     return OK;
 }
 
-PRIVATE int hello_close(d, m)
+PRIVATE int secret_close(d, m)
     struct driver *d;
     message *m;
 {
-    printf("hello_close()\n");
+    printf("secret_close()\n");
 
+    /* If a full secret has been read - clear it */ 
     if (secretRead && !secretEmpty) {
         clearSecret();
     }    
     
-    printf("End of close. %d file descriptors, Owner: %d \n", secretNumFileDescriptors, secretOwner);
+    printf("End of close. Owner: %d \n", secretOwner);
 
     return OK;
 }
 
-PRIVATE struct device * hello_prepare(dev)
+PRIVATE struct device * secret_prepare(dev)
     int dev;
 {
-    hello_device.dv_base.lo = 0;
-    hello_device.dv_base.hi = 0;
-    hello_device.dv_size.lo = MESSAGE_SIZE;
-    hello_device.dv_size.hi = 0;
-    return &hello_device;
+    secret_device.dv_base.lo = 0;
+    secret_device.dv_base.hi = 0;
+    secret_device.dv_size.lo = MESSAGE_SIZE;
+    secret_device.dv_size.hi = 0;
+    return &secret_device;
 }
 
-PRIVATE int hello_transfer(proc_nr, opcode, position, iov, nr_req)
+PRIVATE int secret_transfer(proc_nr, opcode, position, iov, nr_req)
     int proc_nr;
     int opcode;
     u64_t position;
@@ -195,26 +193,29 @@ PRIVATE int hello_transfer(proc_nr, opcode, position, iov, nr_req)
 {
     int bytes, ret;
 
-    printf("hello_transfer() called %d times\n", ++transferCalls);
-
     switch (opcode)
     {
         case DEV_GATHER_S:
             /* Reading */
+
             printf("Hello transfer reading. Secret Message: '%s'\n", secretMessage);
 
+            /* Figure out the number of bytes to copy */ 
             bytes = strlen(secretMessage) - position.lo < iov->iov_size ?
                     strlen(secretMessage) - position.lo : iov->iov_size;
 
+            /* If theres nothing to read, just return */ 
             if (bytes <= 0) {
                 return OK;
             }
 
+            /* Copy the secret to the recieving process */ 
             ret = sys_safecopyto(proc_nr, iov->iov_addr, 0,
                                 (vir_bytes) secretMessage,
                                  bytes, D);
             iov->iov_size -= bytes;
 
+            /* We have read the secret - set the flag */ 
             secretRead = 1;
 
             break;
@@ -228,20 +229,23 @@ PRIVATE int hello_transfer(proc_nr, opcode, position, iov, nr_req)
             if (strlen(secretMessage) + iov->iov_size > MESSAGE_SIZE) {
                 return ENOSPC;
             }
-            else {
-                /* Message fits */ 
+            else { /* Message fits */ 
+
+                /* Number of bytes to transfer = IO buffer size */ 
                 bytes = iov->iov_size;
            
-                printf("Transfer bytes: %d, strlen: %d \n", bytes, strlen(secretMessage)); 
+                printf("Transfer bytes: %d\n", bytes);
 
+                /* Copy the message from the IO Buffer to our string */ 
                 ret = sys_safecopyfrom(proc_nr, iov->iov_addr, 0,
                                     (vir_bytes) secretMessage,
                                      bytes, D);    
 
+                /* Mark flags - secret hasnt been read and is full */ 
                 secretEmpty = 0;
                 secretRead = 0;
 
-                printf("transfer Secret Message: '%s'\n", secretMessage);
+                printf("Transfer Secret Message: '%s'\n", secretMessage);
             }
             break;
 
@@ -249,39 +253,34 @@ PRIVATE int hello_transfer(proc_nr, opcode, position, iov, nr_req)
             return EINVAL;
     }
 
-    printf("hello transfer returning: %d\n", ret);
-
     return ret;
 }
 
-PRIVATE void hello_geometry(entry)
+PRIVATE void secret_geometry(entry)
     struct partition *entry;
 {
-    printf("hello_geometry()\n");
+    printf("secret_geometry()\n");
     entry->cylinders = 0;
     entry->heads     = 0;
     entry->sectors   = 0;
 }
 
-PRIVATE int hello_ioctl(d, m)
+PRIVATE int secret_ioctl(d, m)
     struct driver *d;
     message *m;
 {
-    /*  
-    printf("hello_ioctl() called \n"); 
-*/
     struct ucred callerCreds;
     uid_t grantee;
     int res;
 
-    printf("hello_ioctl()\n");
+    printf("secret_ioctl()\n");
 
     /* SSGRANT is the only supported ioctl call */ 
     if (m->REQUEST != SSGRANT) {
         return ENOTTY;
     }    
 
-    /* Get the UID */
+    /* Get the UID  and store in callerCreds */
     if (getnucred(m->IO_ENDPT, &callerCreds)) {
         fprintf(stderr, "Open: getnucred error \n");
         exit(-1);
@@ -290,7 +289,13 @@ PRIVATE int hello_ioctl(d, m)
     /* Get the grantee */     
     res = sys_safecopyfrom(m->IO_ENDPT, (vir_bytes)m->IO_GRANT, 0, 
             (vir_bytes)&grantee, sizeof(grantee), D);
+    
+    if (res != 0) {
+        fprintf(stderr, "Secret IOCTL: Error with safecopyfrom\n");
+        exit(-1); 
+    }    
 
+    /* Make the grantee the owner if caller is owner*/ 
     if (callerCreds.uid == secretOwner) {
         secretOwner = grantee;
     }  
@@ -299,19 +304,42 @@ PRIVATE int hello_ioctl(d, m)
 }    
 
 PRIVATE int sef_cb_lu_state_save(int state) {
-/* Save the state. */
+    /* Save the state. */
     ds_publish_u32("open_counter", open_counter, DSF_OVERWRITE);
+
+    /* Save the secret state */ 
+    ds_publish_str("secret_message", secretMessage, DSF_OVERWRITE);
+    ds_publish_u32("secret_owner", secretOwner, DSF_OVERWRITE);
+    ds_publish_u32("secret_empty", secretEmpty, DSF_OVERWRITE);
+    ds_publish_u32("secret_read", secretRead, DSF_OVERWRITE);
 
     return OK;
 }
 
 PRIVATE int lu_state_restore() {
-/* Restore the state. */
+    /* Restore the state. */
     u32_t value;
+    char oldSecretRead;
 
     ds_retrieve_u32("open_counter", &value);
     ds_delete_u32("open_counter");
     open_counter = (int) value;
+
+    /* Restore the Secret state */ 
+    ds_retrieve_str("secret_message", secretMessage, MESSAGE_SIZE);
+    ds_delete_str("secret_message");
+    
+    ds_retrieve_u32("secret_owner", &value);
+    ds_delete_u32("secret_owner");
+    secretOwner = (int) value;
+    
+    ds_retrieve_u32("secret_empty", &value);
+    ds_delete_u32("secret_empty");
+    secretEmpty = (int) value;
+    
+    ds_retrieve_u32("secret_read", &value);
+    ds_delete_u32("secret_read");
+    secretRead = (int) value;
 
     return OK;
 }
@@ -384,15 +412,9 @@ void clearSecret() {
     }
 }
 
-void initSecret() {
-    secretNumFileDescriptors = 0;
-
-    clearSecret();
-}
-
 PUBLIC int main(int argc, char **argv)
 {
-    initSecret();
+    clearSecret();
 
     /*
      * Perform initialization.
@@ -402,7 +424,7 @@ PUBLIC int main(int argc, char **argv)
     /*
      * Run the main loop.
      */
-    driver_task(&hello_tab, DRIVER_STD);
+    driver_task(&secret_tab, DRIVER_STD);
     return OK;
 }
 
