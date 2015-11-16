@@ -64,11 +64,10 @@ PRIVATE struct driver secret_tab =
 PRIVATE struct device secret_device;
 
 /* Secret global variables */
-static uid_t secretOwner;
-static char secretMessage[MESSAGE_SIZE]; 
-static int secretEmpty;
-
-static int secretRead = 1; 
+static uid_t secretOwner;                /* The UID of the owner process */ 
+static char secretMessage[MESSAGE_SIZE]; /* The message string */ 
+static int secretEmpty;                  /* 1 if empty. 0 if full */  
+static int secretRead = 1;               /* 1 if read. 0 if not read */  
 
 /** State variable to count the number of times the device has been opened. */
 PRIVATE int open_counter;
@@ -110,6 +109,8 @@ PRIVATE int secret_open(d, m)
     }  
   */  
     if (secretEmpty) {
+        /* Secret empty - Owner changes to caller */ 
+
         secretOwner = callerCreds.uid;
         
         if (openFlags == O_RDONLY) {
@@ -213,6 +214,12 @@ PRIVATE int secret_transfer(proc_nr, opcode, position, iov, nr_req)
             ret = sys_safecopyto(proc_nr, iov->iov_addr, 0,
                                 (vir_bytes) secretMessage,
                                  bytes, D);
+
+            if (ret != 0) {
+                printf("Transfer: Problem with safecopyto \n");
+                exit(-1);
+            }    
+
             iov->iov_size -= bytes;
 
             /* We have read the secret - set the flag */ 
@@ -239,7 +246,11 @@ PRIVATE int secret_transfer(proc_nr, opcode, position, iov, nr_req)
                 /* Copy the message from the IO Buffer to our string */ 
                 ret = sys_safecopyfrom(proc_nr, iov->iov_addr, 0,
                                     (vir_bytes) secretMessage,
-                                     bytes, D);    
+                                     bytes, D);   
+                if (ret != 0) {
+                    printf("Transfer: Problem with safecopyfrom\n");
+                    exit(-1);
+                }    
 
                 /* Mark flags - secret hasnt been read and is full */ 
                 secretEmpty = 0;
@@ -398,6 +409,10 @@ PRIVATE int sef_cb_init(int type, sef_init_info_t *info)
     return OK;
 }
 
+/* 
+ * Function to clear the secret and owner and 
+ * reset the secret flags 
+ */ 
 void clearSecret() {
     int i;  
     
