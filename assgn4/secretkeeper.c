@@ -1,3 +1,9 @@
+/*
+ * CPE 453
+ * Assignment 4 - /dev/Secret 
+ * Lance Boettcher (lboettch)
+ * Christina Sardo (csardo)
+ */  
 #include <minix/drivers.h>
 #include <minix/driver.h>
 #include <stdio.h>
