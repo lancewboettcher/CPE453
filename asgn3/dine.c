@@ -1,3 +1,11 @@
+/* 
+ * CPE 453 - Assignment 3
+ * Dining Philosophers 
+ *
+ * Lance Boettcher (lboettch)
+ *
+*/ 
+
 #include <errno.h> 
 #include <stdio.h> 
 #include <string.h> 
@@ -7,12 +15,12 @@
 #include <time.h>
 #include <limits.h>
 
-#define NUM_PHILOSOPHERS 5
+#define NUM_PHILOSOPHERS 5 
 #define NUM_FORKS 5
-#define DEFAULT_CYCLES 1
+#define DEFAULT_CYCLES 1   /* Default number of eat-think cycles */ 
 #define LEFT_FORK (id+1)%NUM_PHILOSOPHERS
 #define RIGHT_FORK (id)
-#define FORK_DOWN 100
+#define FORK_DOWN 100      /* Random int value to indicate fork is down */
 #define EATING 0
 #define THINKING 1
 #define CHANGING 2
@@ -29,6 +37,8 @@ void printHeader();
 void printFooter();
 void printStatusLine();
 void dawdle();
+void initLocks();
+void destroyLocks();
 
 int numCycles;                    /* Number of eat-think cycles to go through */
 int state[NUM_PHILOSOPHERS];      /* EATING THINKING or CHANGING */ 
@@ -39,10 +49,9 @@ pthread_mutex_t takeForkLock;     /* take_forks lock */
 pthread_mutex_t putForkLock;      /* put_forks lock */ 
 
 void *philosopher(void *id) {
-
+   /* We know that this is always going to be a int */
    int myId = *(int *)id;
    int i; 
-
 
    /* Cycle through eating and thinking */ 
    for (i = 0; i < numCycles; i++) {
@@ -51,6 +60,8 @@ void *philosopher(void *id) {
       put_forks(myId);
       think(myId);
 
+      /* If we don't set the state to changing here they will be 
+       * thinking while waiting for forks even though theyre hungry */
       state[myId] = CHANGING;
    }
 
@@ -58,8 +69,12 @@ void *philosopher(void *id) {
 }
 
 void take_forks(int id) {
-   pthread_mutex_lock(&takeForkLock);
-  
+   /* Enter critical section */ 
+   if (pthread_mutex_lock(&takeForkLock) != 0) {
+      fprintf(stderr, "P thread error entering take_forks \n");
+      exit(-1);
+   }
+
    /* Philosopher is hungry */  
    state[id] = CHANGING;
 
@@ -76,13 +91,20 @@ void take_forks(int id) {
       takeRightFork(id);
    }      
 
-   pthread_mutex_unlock(&takeForkLock);
+   /* Leave Critical section */ 
+   if (pthread_mutex_unlock(&takeForkLock) != 0) {
+      fprintf(stderr, "P thread error leaving take_fork \n");
+      exit(-1);
+   }
 }
 
 void put_forks(int id) {
    /* Enter Critical Region */ 
-   pthread_mutex_lock(&putForkLock);
-   
+   if (pthread_mutex_lock(&putForkLock) != 0) {
+      fprintf(stderr, "P thread error entering put_forks \n");
+      exit(-1);
+   }
+
    /* Philosopher wants to think */ 
    state[id] = CHANGING;
 
@@ -90,28 +112,47 @@ void put_forks(int id) {
 
    /* Unlock the forks for other philosophers */ 
    printForks[LEFT_FORK] = FORK_DOWN;
-   pthread_mutex_unlock(&(forks[LEFT_FORK]));
+   if (pthread_mutex_unlock(&(forks[LEFT_FORK])) != 0) {
+      fprintf(stderr, "P thread error unlocking left fork \n");
+      exit(-1);
+   }
  
    printStatusLine();
 
    printForks[RIGHT_FORK] = FORK_DOWN;
-   pthread_mutex_unlock(&(forks[RIGHT_FORK]));
+   if (pthread_mutex_unlock(&(forks[RIGHT_FORK])) != 0) {
+      fprintf(stderr, "P thread error unlocking right fork \n");
+      exit(-1);
+   }
 
    printStatusLine();
    
    /* Exit critical region */ 
-   pthread_mutex_unlock(&putForkLock);
+   if (pthread_mutex_unlock(&putForkLock) != 0) {
+      fprintf(stderr, "P thread error leaving put_forks \n");
+      exit(-1);
+   }
 }
 
 void takeLeftFork(int id) {
-   pthread_mutex_lock(&(forks[LEFT_FORK]));
+   /* Try to lock the left fork, if not - block */ 
+   if (pthread_mutex_lock(&(forks[LEFT_FORK])) != 0) {
+      fprintf(stderr, "P thread error locking left fork \n");
+      exit(-1);
+   }
+
    printForks[LEFT_FORK] = id;
 
    printStatusLine();
 }
 
 void takeRightFork(int id) {
-   pthread_mutex_lock(&(forks[RIGHT_FORK]));
+   /* Try to lock the right fork, if not - block */ 
+   if (pthread_mutex_lock(&(forks[RIGHT_FORK])) != 0) {
+      fprintf(stderr, "P thread error locking right fork \n");
+      exit(-1);
+   }
+
    printForks[RIGHT_FORK] = id;
 
    printStatusLine();
@@ -135,7 +176,11 @@ void think(int id) {
    dawdle();
 }
 
+
 void printHeader() {
+   /* This will only work for 5 philosophers but thats okay 
+    * for this implementation */ 
+
    printf("|=============|=============|=============|");
    printf("=============|=============|\n");
 
@@ -147,20 +192,25 @@ void printHeader() {
 }
 
 void printFooter() {
+   /* This will only work for 5 philosophers but thats okay 
+    * for this implementation */ 
+
    printf("|=============|=============|=============|");
    printf("=============|=============|\n");
 }
 
 void printStatusLine() {
    /* Lock printing so we don't overwrite rows */ 
-   pthread_mutex_lock(&printLock);
+   if (pthread_mutex_lock(&printLock) != 0) {
+      fprintf(stderr, "P thread error entering print function \n");
+      exit(-1);
+   }
 
    int i, j;
 
    printf("|");
 
    for (i = 0; i < NUM_PHILOSOPHERS; i++) {
-      
       printf(" ");
 
       /* Printing the fork statuses. e.g.: "-12--" */ 
@@ -183,12 +233,62 @@ void printStatusLine() {
    printf("\n");
 
    /* Done printing line, unlock */ 
-   pthread_mutex_unlock(&printLock);
+   if (pthread_mutex_unlock(&printLock) != 0) {
+      fprintf(stderr, "P thread error leaving printing function \n");
+      exit(-1);
+   }
 }
 
-void initPhilosophers() {
+void initLocks() {
+   int i; 
 
+   if (pthread_mutex_init(&putForkLock, NULL) != 0) {
+      fprintf(stderr, "Error initializing put_forks P Thread Mutex\n");
+      exit(-1);
+   }
+   
+   if (pthread_mutex_init(&takeForkLock, NULL) != 0) {
+      fprintf(stderr, "Error initializing take_forks P Thread Mutex\n");
+      exit(-1);
+   }
 
+   if (pthread_mutex_init(&printLock, NULL) != 0) {
+      fprintf(stderr, "Error initializing print P Thread Mutex\n");
+      exit(-1);
+   }
+
+   for (i = 0; i < NUM_PHILOSOPHERS; i++) {
+      if (pthread_mutex_init(&(forks[i]), NULL) != 0) {
+         fprintf(stderr, "Error initializing fork P Thread Mutex\n");
+         exit(-1);
+      }
+   }
+}
+
+void destroyLocks() {
+   int i;
+
+   for (i = 0; i < NUM_PHILOSOPHERS; i++) { 
+      if (pthread_mutex_destroy(&(forks[i])) != 0) {
+         fprintf(stderr, "Error Destroying fork P Thread mutex \n");
+         exit(-1);
+      }
+   }
+
+   if (pthread_mutex_destroy(&putForkLock) != 0) {
+      fprintf(stderr, "Error Destroying put fork P Thread mutex \n");
+      exit(-1);
+   }
+
+   if (pthread_mutex_destroy(&takeForkLock) != 0) {
+      fprintf(stderr, "Error Destroying get fork P Thread mutex \n");
+      exit(-1);
+   }
+
+   if (pthread_mutex_destroy(&printLock) != 0) {
+      fprintf(stderr, "Error Destroying print P Thread mutex \n");
+      exit(-1);
+   }
 }
 
 void dawdle() { 
@@ -211,8 +311,6 @@ void dawdle() {
 }
 
 int main(int argc, char *argv[]) {
-
-   pid_t ppid;
    int i;
    int id[NUM_PHILOSOPHERS];
    pthread_t childid[NUM_PHILOSOPHERS];
@@ -224,6 +322,11 @@ int main(int argc, char *argv[]) {
    if (argc > 1) {
       /* Non Default Cycles */ 
       numCycles = atoi(argv[1]);
+
+      if (numCycles == 0) {
+         /* Error with atoi or 0 */ 
+         numCycles = DEFAULT_CYCLES;
+      }
    }
    else {
       /* No command line argument, use default */ 
@@ -232,22 +335,16 @@ int main(int argc, char *argv[]) {
 
    printHeader();
 
-   ppid = getpid();
+   initLocks();
 
    for (i = 0; i < NUM_PHILOSOPHERS; i++) {
       /* Initialize philosopher IDs */ 
       id[i] = i;	 
 
-      /* Initialize locks */ 
-      if (pthread_mutex_init(&(forks[i]), NULL) != 0) {
-         fprintf(stderr, "Error initializing mutex \n");
-         exit(-1);
-      }
-
       /* Initialize printing array */ 
       printForks[i] = FORK_DOWN;
 
-      /* Initialize philosopher states */ 
+      /* Initialize philosopher states, they all start hungry */ 
       state[i] = CHANGING;
    }
 
@@ -255,26 +352,27 @@ int main(int argc, char *argv[]) {
    for (i = 0; i < NUM_PHILOSOPHERS; i++) {
       int res;
       res = pthread_create(
-      	             &childid[i], 
+      	            &childid[i], 
                      NULL, 
                      philosopher, 
                      (void *) (&id[i]));
 
       if (res == -1) {
-      	fprintf(stderr, "Child %i: %s\n", i, strerror(errno));
+      	fprintf(stderr, "Error spawning child %i: %s\n", 
+               i, strerror(errno));
       	exit(-1);
       }                       
    }
 
    /* Wait for all the philosophers */ 
    for (i = 0; i < NUM_PHILOSOPHERS; i++) {
-      pthread_join(childid[i], NULL);
+      if (pthread_join(childid[i], NULL) != 0) {
+         fprintf(stderr, "P thread error joining child \n");
+         exit(-1);
+      }
    }
 
-   /* Destroy the locks */
-   for (i = 0; i < NUM_PHILOSOPHERS; i++) { 
-      pthread_mutex_destroy(&(forks[i]));
-   }
+   destroyLocks();
 
    printFooter();
 
