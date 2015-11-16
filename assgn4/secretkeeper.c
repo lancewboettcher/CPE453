@@ -17,7 +17,7 @@
 #define O_RDONLY 4
 #define O_RDWR 6   
 
-#define MESSAGE_SIZE 8192
+#define MESSAGE_SIZE 4096
 #define NO_OWNER -1 
 
 /*
@@ -223,10 +223,10 @@ PRIVATE int secret_transfer(proc_nr, opcode, position, iov, nr_req)
         case DEV_SCATTER_S: 
             /* Writing */ 
         
-            printf("Hello transfer writing \n");
+            printf("Hello transfer writing: %d \n", iov->iov_size);
             
             /* If IO buffer size and current message bigger than max size */  
-            if (strlen(secretMessage) + iov->iov_size > MESSAGE_SIZE) {
+            if (iov->iov_size > MESSAGE_SIZE) {
                 return ENOSPC;
             }
             else { /* Message fits */ 
@@ -244,8 +244,6 @@ PRIVATE int secret_transfer(proc_nr, opcode, position, iov, nr_req)
                 /* Mark flags - secret hasnt been read and is full */ 
                 secretEmpty = 0;
                 secretRead = 0;
-
-                printf("Transfer Secret Message: '%s'\n", secretMessage);
             }
             break;
 
