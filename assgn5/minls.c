@@ -4,9 +4,12 @@
 #define TRUE 1
 #define FALSE 0
 #define BYTESIZE 8
+#define BAD_MAGIC_NUMBER -1
+#define INVALID_PARTITION -2
 
 /* Global Variables */
 struct superblock *superBlock = NULL;
+struct partitionEntry *partitionTable = NULL;
 
 /* Function Prototypes */
 void printHelp(void);
@@ -15,6 +18,7 @@ int initFileSystem(FILE *fileImage);
 
 int main (int argc, char *argv[]) {
    int i = 1;
+   int errorMessage;
    int verbose = FALSE;
    char *fileName;
    FILE *fileImage;   
@@ -66,15 +70,22 @@ int main (int argc, char *argv[]) {
    /* Open file image for reading */
    fileImage = fopen(fileName, "r");
 
+   /* Checking if file was opened */
    if (fileImage == NULL) {
       fprintf(stderr, "Unable to open file specified\n");
 
       return EXIT_FAILURE;
    }
    
-   if (initFileSystem(fileImage)) {
-      fprintf(stderr, "An error occured when attempting to initialize the "
-            "file system\n");
+   /* Error message handling */
+   if ((errorMessage = initFileSystem(fileImage))) {
+         if (errorMessage == INVALID_PARTITION) {
+            fprintf(stderr, "Unable to open disk image \"%s\".\n", fileName);
+         }
+         else if (errorMessage != BAD_MAGIC_NUMBER) {
+            fprintf(stderr, "An error occured when attempting to initialize the "
+                  "file system\n");
+         }
 
       return EXIT_FAILURE;
    }
@@ -88,16 +99,34 @@ int main (int argc, char *argv[]) {
 }
 
 int initFileSystem(FILE *fileImage) {
-   //TODO: CHECK THE BOOT IMAGE (See comments)
+   //TODO: CHECK THE BOOT IMAGE (See comment below)
    /* First check the boot block for magic number */
-   /* Check if the partition table is valid before proceeding */
 
-   /* Initialize the superblock */
-   superBlock = malloc(sizeof(struct superblock));
+   /* Initialize the blocks */
+   superBlock = malloc(sizeof(struct superblock));   
+   partitionTable = malloc(sizeof(struct partitionEntry));
+   
+   /* Seek to partition sector and read the table */
+   fseek(fileImage, PARTITION_TABLE_LOC, SEEK_SET);
+   fread(partitionTable, sizeof(struct partitionEntry), 1, fileImage);
+
+   /* Check if the partition table is valid before proceeding */
+   if (partitionTable->bootind != BOOTABLE_MAGIC_NUM) {
+      fprintf(stderr, "Invalid partition table.\n");
+
+      return INVALID_PARTITION;
+   }
 
    /* Seek to the next block (boot block is 2 sectors) */
    fseek(fileImage, SECTOR_SIZE * 2, SEEK_SET);
    fread(superBlock, sizeof(struct superblock), 1, fileImage);
+
+   if (superBlock->magic != MAGIC_NUMBER) {
+      fprintf(stderr, "Bad magic number. (0x%.4u)\n", superBlock->magic);
+      fprintf(stderr, "This doesn't look like a MINIX filesystem.\n");
+      
+      return BAD_MAGIC_NUMBER;
+   }
 
    printf("YAY\n");
    return EXIT_SUCCESS;
@@ -106,17 +135,17 @@ int initFileSystem(FILE *fileImage) {
 void printVerbose() {
    printf("\nSuperblock Contents:\n");
    printf("Stored Fields:\n");
-   printf("ninodes          %u\n", superBlock->ninodes);
-   printf("i_blocks         %u\n", superBlock->i_blocks);
-   printf("z_blocks         %u\n", superBlock->z_blocks);
-   printf("firstdata        %u\n", superBlock->firstdata);
-   printf("log_zone_size    %u (zone size: %u)\n",
+   printf("  ninodes        %u\n", superBlock->ninodes);
+   printf("  i_blocks       %u\n", superBlock->i_blocks);
+   printf("  z_blocks       %u\n", superBlock->z_blocks);
+   printf("  firstdata      %u\n", superBlock->firstdata);
+   printf("  log_zone_size  %u (zone size: %u)\n",
     superBlock->log_zone_size, superBlock->blocksize << superBlock->log_zone_size);
-   printf("max_file         %u\n", superBlock->max_file);
-   printf("magic            %x\n", superBlock->magic);
-   printf("zones            %u\n", superBlock->zones);
-   printf("blocksize        %u\n", superBlock->blocksize);
-   printf("subversion       %u\n", superBlock->subversion);
+   printf("  max_file       %u\n", superBlock->max_file);
+   printf("  magic          %x\n", superBlock->magic);
+   printf("  zones          %u\n", superBlock->zones);
+   printf("  blocksize      %u\n", superBlock->blocksize);
+   printf("  subversion     %u\n", superBlock->subversion);
 }
 
 void printHelp() {
