@@ -1,0 +1,7 @@
+CPE 453 - Assignment 3
+Dining Philosophers
+
+Lance Boettcher (lboettch) 
+
+Remember to compile with -lpthread and -lrt
+e.g. gcc -Wall -lpthread -lrt dine.c
