@@ -1,13 +1,16 @@
+//TODO: read path from command line
 #include "filesystem.h"
 
 #define TRUE 1
 #define FALSE 0
+#define BYTESIZE 8
 
 /* Global Variables */
-superblock *superBlock = NULL;
+struct superblock *superBlock = NULL;
 
 /* Function Prototypes */
 void printHelp(void);
+void printVerbose(void);
 int initFileSystem(FILE *fileImage);
 
 int main (int argc, char *argv[]) {
@@ -77,21 +80,43 @@ int main (int argc, char *argv[]) {
    }
 
    if (verbose) {
-      printf("Hey we got here\n");
+      printVerbose();
    }
 
+   fclose(fileImage);
    return EXIT_SUCCESS;
 }
 
 int initFileSystem(FILE *fileImage) {
+   //TODO: CHECK THE BOOT IMAGE (See comments)
    /* First check the boot block for magic number */
-
    /* Check if the partition table is valid before proceeding */
 
-   superBlock = malloc(sizeof(superblock));
+   /* Initialize the superblock */
+   superBlock = malloc(sizeof(struct superblock));
 
+   /* Seek to the next block (boot block is 2 sectors) */
+   fseek(fileImage, SECTOR_SIZE * 2, SEEK_SET);
+   fread(superBlock, sizeof(struct superblock), 1, fileImage);
 
+   printf("YAY\n");
    return EXIT_SUCCESS;
+}
+
+void printVerbose() {
+   printf("\nSuperblock Contents:\n");
+   printf("Stored Fields:\n");
+   printf("ninodes          %u\n", superBlock->ninodes);
+   printf("i_blocks         %u\n", superBlock->i_blocks);
+   printf("z_blocks         %u\n", superBlock->z_blocks);
+   printf("firstdata        %u\n", superBlock->firstdata);
+   printf("log_zone_size    %u (zone size: %u)\n",
+    superBlock->log_zone_size, superBlock->blocksize << superBlock->log_zone_size);
+   printf("max_file         %u\n", superBlock->max_file);
+   printf("magic            %x\n", superBlock->magic);
+   printf("zones            %u\n", superBlock->zones);
+   printf("blocksize        %u\n", superBlock->blocksize);
+   printf("subversion       %u\n", superBlock->subversion);
 }
 
 void printHelp() {

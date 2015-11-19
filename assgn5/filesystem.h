@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <inttypes.h>
 
 /* File Types */
 #define FILE_TYPE_MASK 0170000 
@@ -18,11 +19,16 @@
 
 /* Useful Constants */
 #define PARTITION_TABLE_LOC 0x1BE 
-#define PARTITION_TYPE 0x81 
+#define MINIX_PARTITION_TYPE 0x81 
 #define MAGIC_NUMBER 0x4D5A 
 #define MAGIC_NUM_REVERSED 0x5A4D 
 #define BOOTABLE_MAGIC_NUM 0x80
-#define MINIX_PARTITION 0x81
+
+/* May need to rename these... */
+#define BOOT_SECTOR_BYTE_510 510
+#define BOOT_SECTOR_BYTE_510_VAL 0x55
+#define BOOT_SECTOR_BYTE_511 511
+#define BOOT_SECTOR_BYTE_511_VAL 0xAA
 
 #define SECTOR_SIZE 512
 #define INODE_SIZE 64
