@@ -1,4 +1,6 @@
 //TODO: read path from command line
+//TODO: add 4 primary partition tables
+//TODO: add subpartition table functionality
 #include "filesystem.h"
 
 #define TRUE 1
@@ -14,12 +16,12 @@ struct partitionEntry *partitionTable = NULL;
 /* Function Prototypes */
 void printHelp(void);
 void printVerbose(void);
-int initFileSystem(FILE *fileImage);
+int initFileSystem(FILE *fileImage, int hasPartition);
 
 int main (int argc, char *argv[]) {
    int i = 1;
    int errorMessage;
-   int verbose = FALSE;
+   int verbose = FALSE, partitionVal = FALSE;
    char *fileName;
    FILE *fileImage;   
 
@@ -43,6 +45,7 @@ int main (int argc, char *argv[]) {
          switch(argv[i][1]) {
          case 'p':
             /* select partition */
+            partitionVal = TRUE;
             break;
          case 's':
             /* select substitution */
@@ -78,7 +81,7 @@ int main (int argc, char *argv[]) {
    }
    
    /* Error message handling */
-   if ((errorMessage = initFileSystem(fileImage))) {
+   if ((errorMessage = initFileSystem(fileImage, partitionVal))) {
          if (errorMessage == INVALID_PARTITION) {
             fprintf(stderr, "Unable to open disk image \"%s\".\n", fileName);
          }
@@ -98,23 +101,29 @@ int main (int argc, char *argv[]) {
    return EXIT_SUCCESS;
 }
 
-int initFileSystem(FILE *fileImage) {
+int initFileSystem(FILE *fileImage, int partitionVal) {
    //TODO: CHECK THE BOOT IMAGE (See comment below)
    /* First check the boot block for magic number */
 
    /* Initialize the blocks */
    superBlock = malloc(sizeof(struct superblock));   
-   partitionTable = malloc(sizeof(struct partitionEntry));
    
-   /* Seek to partition sector and read the table */
-   fseek(fileImage, PARTITION_TABLE_LOC, SEEK_SET);
-   fread(partitionTable, sizeof(struct partitionEntry), 1, fileImage);
+   /* If a partitition was specified, check the partition table for validity */
+   if (partitionVal) {
+      printf("HELI\n");
+      partitionTable = malloc(sizeof(struct partitionEntry));
+      
+      /* Seek to partition sector and read the table */
+      fseek(fileImage, PARTITION_TABLE_LOC, SEEK_SET);
+      fread(partitionTable, sizeof(struct partitionEntry), 1, fileImage);
 
-   /* Check if the partition table is valid before proceeding */
-   if (partitionTable->bootind != BOOTABLE_MAGIC_NUM) {
-      fprintf(stderr, "Invalid partition table.\n");
+      /* Check if the partition table is valid before proceeding */
+      if (partitionTable->bootind != BOOTABLE_MAGIC_NUM 
+         || partitionTable->type != MINIX_PARTITION_TYPE) {
+         fprintf(stderr, "Invalid partition table.\n");
 
-      return INVALID_PARTITION;
+         return INVALID_PARTITION;
+      }
    }
 
    /* Seek to the next block (boot block is 2 sectors) */
@@ -122,6 +131,7 @@ int initFileSystem(FILE *fileImage) {
    fread(superBlock, sizeof(struct superblock), 1, fileImage);
 
    if (superBlock->magic != MAGIC_NUMBER) {
+      printVerbose();
       fprintf(stderr, "Bad magic number. (0x%.4u)\n", superBlock->magic);
       fprintf(stderr, "This doesn't look like a MINIX filesystem.\n");
       
@@ -133,6 +143,17 @@ int initFileSystem(FILE *fileImage) {
 }
 
 void printVerbose() {
+   if (partitionTable != NULL) {
+      printf("\n\nPartition table:\n");
+      printf("       ----Start----      ------End------\n");
+      printf("  Boot head  sec  cyl Type head  sec  cyl      First       Size\n");
+      printf("  0x%x    %u    %u    %u 0x%x    %u   %u  %u         %u      %u",
+         partitionTable->bootind, partitionTable->start_head, partitionTable->start_sec,
+         partitionTable->start_cyl, partitionTable->type, partitionTable->end_head,
+         partitionTable->end_sec, partitionTable->end_cyl, partitionTable->lFirst,
+         partitionTable->size);
+   }
+
    printf("\nSuperblock Contents:\n");
    printf("Stored Fields:\n");
    printf("  ninodes        %u\n", superBlock->ninodes);
