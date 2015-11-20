@@ -27,7 +27,6 @@
 /* May need to rename these... */
 #define BOOT_SECTOR_BYTE_510 510
 #define BOOT_SECTOR_BYTE_510_VAL 0x55
-#define BOOT_SECTOR_BYTE_511 511
 #define BOOT_SECTOR_BYTE_511_VAL 0xAA
 
 #define SECTOR_SIZE 512

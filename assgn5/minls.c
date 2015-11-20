@@ -11,19 +11,22 @@
 
 /* Global Variables */
 struct superblock *superBlock = NULL;
-struct partitionEntry *partitionTable = NULL;
+struct partitionEntry *partitionTable[4] = {NULL};
+struct partitionEntry *subPartitionTable[4] = {NULL};
+
 
 /* Function Prototypes */
 void printHelp(void);
 void printVerbose(void);
-int initFileSystem(FILE *fileImage, int hasPartition);
+int initFileSystem(FILE *, int, int);
 
 int main (int argc, char *argv[]) {
    int i = 1;
    int errorMessage;
-   int verbose = FALSE, partitionVal = FALSE;
+   int verbose = FALSE;
+   int whichPartition = -1, whichSubPartition = -1;
    char *fileName;
-   FILE *fileImage;   
+   FILE *fileImage;
 
    /* If number of command line arguments less than 2, not enough args for
     * filename, list options */
@@ -45,10 +48,15 @@ int main (int argc, char *argv[]) {
          switch(argv[i][1]) {
          case 'p':
             /* select partition */
-            partitionVal = TRUE;
+
+            /* Grab which partition to look at */
+            whichPartition = atoi(argv[++i]);
             break;
          case 's':
             /* select substitution */
+
+            /* Grab which subpartition to look at */
+            whichSubPartition = atoi(argv[++i]);
             break;
          case 'h':
             /* print help */
@@ -81,7 +89,7 @@ int main (int argc, char *argv[]) {
    }
    
    /* Error message handling */
-   if ((errorMessage = initFileSystem(fileImage, partitionVal))) {
+   if ((errorMessage = initFileSystem(fileImage, whichPartition, whichSubPartition))) {
          if (errorMessage == INVALID_PARTITION) {
             fprintf(stderr, "Unable to open disk image \"%s\".\n", fileName);
          }
@@ -101,33 +109,82 @@ int main (int argc, char *argv[]) {
    return EXIT_SUCCESS;
 }
 
-int initFileSystem(FILE *fileImage, int partitionVal) {
+int initFileSystem(FILE *fileImage, int whichPartition, int whichSubPartition) {
    //TODO: CHECK THE BOOT IMAGE (See comment below)
    /* First check the boot block for magic number */
+
+   int i;
 
    /* Initialize the blocks */
    superBlock = malloc(sizeof(struct superblock));   
    
    /* If a partitition was specified, check the partition table for validity */
-   if (partitionVal) {
-      printf("HELI\n");
-      partitionTable = malloc(sizeof(struct partitionEntry));
-      
-      /* Seek to partition sector and read the table */
-      fseek(fileImage, PARTITION_TABLE_LOC, SEEK_SET);
-      fread(partitionTable, sizeof(struct partitionEntry), 1, fileImage);
+   if (whichPartition >= 0) {
+      uint8_t bootSectValidation510, bootSectValidation511;
 
-      /* Check if the partition table is valid before proceeding */
-      if (partitionTable->bootind != BOOTABLE_MAGIC_NUM 
-         || partitionTable->type != MINIX_PARTITION_TYPE) {
-         fprintf(stderr, "Invalid partition table.\n");
+      fseek(fileImage, BOOT_SECTOR_BYTE_510, SEEK_SET);
+      fread(&bootSectValidation510, sizeof(uint8_t), 1, fileImage);
+      fread(&bootSectValidation511, sizeof(uint8_t), 1, fileImage);
+
+      if (bootSectValidation510 != BOOT_SECTOR_BYTE_510_VAL ||
+            bootSectValidation511 != BOOT_SECTOR_BYTE_511_VAL) {
+         fprintf(stderr, "Partition table does not contain a valid signature\n");
 
          return INVALID_PARTITION;
       }
+      
+      /* Seek to partition sector and read the table */
+      fseek(fileImage, PARTITION_TABLE_LOC, SEEK_SET);
+
+      for (i=0; i<NUM_PRIMARY_PARTITONS; i++) {
+         partitionTable[i] = malloc(sizeof(struct partitionEntry));
+
+         fread(partitionTable[i], sizeof(struct partitionEntry), 1, fileImage);
+
+         /* Check if the partition table is valid before proceeding */
+         if (i == whichPartition && (partitionTable[i]->bootind != BOOTABLE_MAGIC_NUM 
+            || partitionTable[i]->type != MINIX_PARTITION_TYPE)) {
+            fprintf(stderr, "Invalid partition table.\n");
+
+            return INVALID_PARTITION;
+         }
+      }
    }
 
-   /* Seek to the next block (boot block is 2 sectors) */
-   fseek(fileImage, SECTOR_SIZE * 2, SEEK_SET);
+   /* Search for sub partiton, if any */
+   if (whichSubPartition >= 0) {
+      /* Seek to the sector that lFirst of the specified partition points to */
+      fseek(fileImage, SECTOR_SIZE * partitionTable[whichPartition]->lFirst, SEEK_SET);
+
+      /* Now seek to the partition table of that sub partition */
+      fseek(fileImage, PARTITION_TABLE_LOC, SEEK_CUR);
+
+      /* Read the subpartition table */
+      for (i=0; i<NUM_PRIMARY_PARTITONS; i++) {
+         subPartitionTable[i] = malloc(sizeof(struct partitionEntry));
+
+         fread(subPartitionTable[i], sizeof(struct partitionEntry), 1, fileImage);
+
+         /* Check if the subpartition table is valid before proceeding */
+         //TODO: INCLUDE THIS ERROR CHECKING??
+         /*if (i == whichSubPartition && (subPartitionTable[i]->bootind != BOOTABLE_MAGIC_NUM 
+            || subPartitionTable[i]->type != MINIX_PARTITION_TYPE)) {
+            fprintf(stderr, "Invalid partition table.\n");
+
+            return INVALID_PARTITION;
+         }*/
+      }
+   }
+
+   /* If no partiton table, seek to the next block (boot block is 2 sectors),
+    * else use the subpartition specified and seek to that boot block */
+   if (whichSubPartition >= 0) {
+      fseek(fileImage, SECTOR_SIZE * subPartitionTable[whichSubPartition]->lFirst, SEEK_SET);
+   }
+   else {
+      fseek(fileImage, SECTOR_SIZE * 2, SEEK_SET);
+   }
+
    fread(superBlock, sizeof(struct superblock), 1, fileImage);
 
    if (superBlock->magic != MAGIC_NUMBER) {
@@ -143,15 +200,32 @@ int initFileSystem(FILE *fileImage, int partitionVal) {
 }
 
 void printVerbose() {
-   if (partitionTable != NULL) {
-      printf("\n\nPartition table:\n");
+   int i;
+
+   if (*partitionTable != NULL) {
+      printf("\nPartition table:\n");
       printf("       ----Start----      ------End------\n");
       printf("  Boot head  sec  cyl Type head  sec  cyl      First       Size\n");
-      printf("  0x%x    %u    %u    %u 0x%x    %u   %u  %u         %u      %u",
-         partitionTable->bootind, partitionTable->start_head, partitionTable->start_sec,
-         partitionTable->start_cyl, partitionTable->type, partitionTable->end_head,
-         partitionTable->end_sec, partitionTable->end_cyl, partitionTable->lFirst,
-         partitionTable->size);
+      for (i=0; i<NUM_PRIMARY_PARTITONS; i++) {
+         printf("  0x%.02x    %u    %u    %u 0x%.02x    %u   %u  %u         %u      %u\n",
+            partitionTable[i]->bootind, partitionTable[i]->start_head, partitionTable[i]->start_sec,
+            partitionTable[i]->start_cyl, partitionTable[i]->type, partitionTable[i]->end_head,
+            partitionTable[i]->end_sec & 0x3F, ((partitionTable[i]->end_sec & 0xC0)<<2) + partitionTable[i]->end_cyl, partitionTable[i]->lFirst,
+            partitionTable[i]->size);
+      }
+   }
+
+   if (*subPartitionTable != NULL) {
+      printf("\nPartition table:\n");
+      printf("       ----Start----      ------End------\n");
+      printf("  Boot head  sec  cyl Type head  sec  cyl      First       Size\n");
+      for (i=0; i<NUM_PRIMARY_PARTITONS; i++) {
+         printf("  0x%.02x    %u    %u    %u 0x%.02x    %u   %u  %u         %u      %u\n",
+            subPartitionTable[i]->bootind, subPartitionTable[i]->start_head, subPartitionTable[i]->start_sec,
+            subPartitionTable[i]->start_cyl, subPartitionTable[i]->type, subPartitionTable[i]->end_head,
+            subPartitionTable[i]->end_sec & 0x3F, ((subPartitionTable[i]->end_sec & 0xC0)<<2) + 
+            subPartitionTable[i]->end_cyl, partitionTable[i]->lFirst, subPartitionTable[i]->size);
+      }
    }
 
    printf("\nSuperblock Contents:\n");
