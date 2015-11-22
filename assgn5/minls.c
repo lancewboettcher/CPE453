@@ -89,13 +89,14 @@ int main (int argc, char *argv[]) {
    }
    
    /* Error message handling */
-   if ((errorMessage = initFileSystem(fileImage, whichPartition, whichSubPartition))) {
+   if ((errorMessage = 
+            initFileSystem(fileImage, whichPartition, whichSubPartition))) {
          if (errorMessage == INVALID_PARTITION) {
             fprintf(stderr, "Unable to open disk image \"%s\".\n", fileName);
          }
          else if (errorMessage != BAD_MAGIC_NUMBER) {
-            fprintf(stderr, "An error occured when attempting to initialize the "
-                  "file system\n");
+            fprintf(stderr, "An error occured when attempting to initialize "
+                  "the file system\n");
          }
 
       return EXIT_FAILURE;
@@ -109,7 +110,8 @@ int main (int argc, char *argv[]) {
    return EXIT_SUCCESS;
 }
 
-int initFileSystem(FILE *fileImage, int whichPartition, int whichSubPartition) {
+int initFileSystem(FILE *fileImage, int whichPartition, 
+      int whichSubPartition) {
    //TODO: CHECK THE BOOT IMAGE (See comment below)
    /* First check the boot block for magic number */
 
@@ -128,7 +130,8 @@ int initFileSystem(FILE *fileImage, int whichPartition, int whichSubPartition) {
 
       if (bootSectValidation510 != BOOT_SECTOR_BYTE_510_VAL ||
             bootSectValidation511 != BOOT_SECTOR_BYTE_511_VAL) {
-         fprintf(stderr, "Partition table does not contain a valid signature\n");
+         fprintf(stderr, "Partition table does not contain a "
+               "valid signature\n");
 
          return INVALID_PARTITION;
       }
@@ -139,10 +142,12 @@ int initFileSystem(FILE *fileImage, int whichPartition, int whichSubPartition) {
       for (i=0; i<NUM_PRIMARY_PARTITONS; i++) {
          partitionTable[i] = malloc(sizeof(struct partitionEntry));
 
-         fread(partitionTable[i], sizeof(struct partitionEntry), 1, fileImage);
+         fread(partitionTable[i], sizeof(struct partitionEntry), 1,
+               fileImage);
 
          /* Check if the partition table is valid before proceeding */
-         if (i == whichPartition && (partitionTable[i]->bootind != BOOTABLE_MAGIC_NUM 
+         if (i == whichPartition && 
+               (partitionTable[i]->bootind != BOOTABLE_MAGIC_NUM 
             || partitionTable[i]->type != MINIX_PARTITION_TYPE)) {
             fprintf(stderr, "Invalid partition table.\n");
 
@@ -154,7 +159,8 @@ int initFileSystem(FILE *fileImage, int whichPartition, int whichSubPartition) {
    /* Search for sub partiton, if any */
    if (whichSubPartition >= 0) {
       /* Seek to the sector that lFirst of the specified partition points to */
-      fseek(fileImage, SECTOR_SIZE * partitionTable[whichPartition]->lFirst, SEEK_SET);
+      fseek(fileImage, SECTOR_SIZE * partitionTable[whichPartition]->lFirst, 
+            SEEK_SET);
 
       /* Now seek to the partition table of that sub partition */
       fseek(fileImage, PARTITION_TABLE_LOC, SEEK_CUR);
@@ -163,11 +169,13 @@ int initFileSystem(FILE *fileImage, int whichPartition, int whichSubPartition) {
       for (i=0; i<NUM_PRIMARY_PARTITONS; i++) {
          subPartitionTable[i] = malloc(sizeof(struct partitionEntry));
 
-         fread(subPartitionTable[i], sizeof(struct partitionEntry), 1, fileImage);
+         fread(subPartitionTable[i], 
+               sizeof(struct partitionEntry), 1, fileImage);
 
          /* Check if the subpartition table is valid before proceeding */
          //TODO: INCLUDE THIS ERROR CHECKING??
-         /*if (i == whichSubPartition && (subPartitionTable[i]->bootind != BOOTABLE_MAGIC_NUM 
+         /*if (i == whichSubPartition && 
+          * (subPartitionTable[i]->bootind != BOOTABLE_MAGIC_NUM 
             || subPartitionTable[i]->type != MINIX_PARTITION_TYPE)) {
             fprintf(stderr, "Invalid partition table.\n");
 
@@ -179,7 +187,8 @@ int initFileSystem(FILE *fileImage, int whichPartition, int whichSubPartition) {
    /* If no partiton table, seek to the next block (boot block is 2 sectors),
     * else use the subpartition specified and seek to that boot block */
    if (whichSubPartition >= 0) {
-      fseek(fileImage, SECTOR_SIZE * subPartitionTable[whichSubPartition]->lFirst, SEEK_SET);
+      fseek(fileImage, SECTOR_SIZE * 
+            subPartitionTable[whichSubPartition]->lFirst, SEEK_SET);
    }
    else {
       fseek(fileImage, SECTOR_SIZE * 2, SEEK_SET);
@@ -195,7 +204,6 @@ int initFileSystem(FILE *fileImage, int whichPartition, int whichSubPartition) {
       return BAD_MAGIC_NUMBER;
    }
 
-   printf("YAY\n");
    return EXIT_SUCCESS;
 }
 
@@ -205,12 +213,21 @@ void printVerbose() {
    if (*partitionTable != NULL) {
       printf("\nPartition table:\n");
       printf("       ----Start----      ------End------\n");
-      printf("  Boot head  sec  cyl Type head  sec  cyl      First       Size\n");
+      printf("  Boot head  sec  cyl Type head  sec  cyl      "
+            "First       Size\n");
       for (i=0; i<NUM_PRIMARY_PARTITONS; i++) {
-         printf("  0x%.02x    %u    %u    %u 0x%.02x    %u   %u  %u         %u      %u\n",
-            partitionTable[i]->bootind, partitionTable[i]->start_head, partitionTable[i]->start_sec,
-            partitionTable[i]->start_cyl, partitionTable[i]->type, partitionTable[i]->end_head,
-            partitionTable[i]->end_sec & 0x3F, ((partitionTable[i]->end_sec & 0xC0)<<2) + partitionTable[i]->end_cyl, partitionTable[i]->lFirst,
+         printf("  0x%.02x    %u    %u    %u 0x%.02x    %u   "
+               "%u  %u         %u      %u\n",
+            partitionTable[i]->bootind, 
+            partitionTable[i]->start_head, 
+            partitionTable[i]->start_sec,
+            partitionTable[i]->start_cyl, 
+            partitionTable[i]->type, 
+            partitionTable[i]->end_head,
+            partitionTable[i]->end_sec & 0x3F, 
+            ((partitionTable[i]->end_sec & 0xC0)<<2) + 
+            partitionTable[i]->end_cyl, 
+            partitionTable[i]->lFirst,
             partitionTable[i]->size);
       }
    }
@@ -218,13 +235,22 @@ void printVerbose() {
    if (*subPartitionTable != NULL) {
       printf("\nPartition table:\n");
       printf("       ----Start----      ------End------\n");
-      printf("  Boot head  sec  cyl Type head  sec  cyl      First       Size\n");
+      printf("  Boot head  sec  cyl Type head  sec  cyl      "
+            "First       Size\n");
       for (i=0; i<NUM_PRIMARY_PARTITONS; i++) {
-         printf("  0x%.02x    %u    %u    %u 0x%.02x    %u   %u  %u         %u      %u\n",
-            subPartitionTable[i]->bootind, subPartitionTable[i]->start_head, subPartitionTable[i]->start_sec,
-            subPartitionTable[i]->start_cyl, subPartitionTable[i]->type, subPartitionTable[i]->end_head,
-            subPartitionTable[i]->end_sec & 0x3F, ((subPartitionTable[i]->end_sec & 0xC0)<<2) + 
-            subPartitionTable[i]->end_cyl, partitionTable[i]->lFirst, subPartitionTable[i]->size);
+         printf("  0x%.02x    %u    %u    %u 0x%.02x    %u   %u  "
+               "%u         %u      %u\n",
+            subPartitionTable[i]->bootind, 
+            subPartitionTable[i]->start_head, 
+            subPartitionTable[i]->start_sec,
+            subPartitionTable[i]->start_cyl, 
+            subPartitionTable[i]->type, 
+            subPartitionTable[i]->end_head,
+            subPartitionTable[i]->end_sec & 0x3F, 
+            ((subPartitionTable[i]->end_sec & 0xC0)<<2) + 
+            subPartitionTable[i]->end_cyl, 
+            partitionTable[i]->lFirst, 
+            subPartitionTable[i]->size);
       }
    }
 
@@ -235,7 +261,8 @@ void printVerbose() {
    printf("  z_blocks       %u\n", superBlock->z_blocks);
    printf("  firstdata      %u\n", superBlock->firstdata);
    printf("  log_zone_size  %u (zone size: %u)\n",
-    superBlock->log_zone_size, superBlock->blocksize << superBlock->log_zone_size);
+    superBlock->log_zone_size, 
+    superBlock->blocksize << superBlock->log_zone_size);
    printf("  max_file       %u\n", superBlock->max_file);
    printf("  magic          %x\n", superBlock->magic);
    printf("  zones          %u\n", superBlock->zones);
