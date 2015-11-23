@@ -264,10 +264,26 @@ void printVerbose() {
     superBlock->log_zone_size, 
     superBlock->blocksize << superBlock->log_zone_size);
    printf("  max_file       %u\n", superBlock->max_file);
-   printf("  magic          %x\n", superBlock->magic);
+   printf("  magic          0x%x\n", superBlock->magic);
    printf("  zones          %u\n", superBlock->zones);
    printf("  blocksize      %u\n", superBlock->blocksize);
    printf("  subversion     %u\n", superBlock->subversion);
+   /*
+   printf("Computed Fields:\n");
+   printf("  version       %u\n", 99999);
+   printf("  firstImap       %u\n", 99999);
+   printf("  firstZmap       %u\n", 99999);
+   printf("  firstIblock       %u\n", 2 + 
+         superBlock->i_blocks + superBlock->z_blocks);
+   printf("  zonesize       %u\n", 
+         superBlock->blocksize << superBlock->log_zone_size);
+   printf("  ptrs_per_zone       %u\n", 99999);
+   printf("  ino_per_block       %lu\n", 
+         superBlock->blocksize / sizeof(struct inode));
+   printf("  wrongended       %u\n", 999999);
+   printf("  fileent_size       %u\n", 99999);
+   printf("  max_filename       %u\n", 99999);
+   printf("  ent_per_zone       %u\n", 99999);*/
 }
 
 void printHelp() {
