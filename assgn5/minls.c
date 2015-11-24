@@ -13,7 +13,7 @@
 struct superblock *superBlock = NULL;
 struct partitionEntry *partitionTable[4] = {NULL};
 struct partitionEntry *subPartitionTable[4] = {NULL};
-
+struct inode *node = NULL;
 
 /* Function Prototypes */
 void printHelp(void);
@@ -189,6 +189,9 @@ int initFileSystem(FILE *fileImage, int whichPartition,
    if (whichSubPartition >= 0) {
       fseek(fileImage, SECTOR_SIZE * 
             subPartitionTable[whichSubPartition]->lFirst, SEEK_SET);
+      
+      /* Seek past the 1KB of boot sector */
+      fseek(fileImage, SECTOR_SIZE * 2, SEEK_CUR);
    }
    else {
       fseek(fileImage, SECTOR_SIZE * 2, SEEK_SET);
@@ -197,13 +200,21 @@ int initFileSystem(FILE *fileImage, int whichPartition,
    fread(superBlock, sizeof(struct superblock), 1, fileImage);
 
    if (superBlock->magic != MAGIC_NUMBER) {
-      printVerbose();
       fprintf(stderr, "Bad magic number. (0x%.4u)\n", superBlock->magic);
       fprintf(stderr, "This doesn't look like a MINIX filesystem.\n");
       
       return BAD_MAGIC_NUMBER;
    }
 
+   //initInode();
+   /* TODO: MOVE THIS TO ANOTHER FUNCTION */
+   node = malloc(sizeof(struct inode));
+   uint32_t addr = superBlock->blocksize * (2 * superBlock->i_blocks + superBlock->z_blocks);
+   addr += sizeof(struct inode) * (1 - 1);
+
+   fseek(fileImage, superBlock->blocksize * 2, SEEK_SET);
+   fseek(fileImage, (superBlock->blocksize * superBlock->z_blocks) + (superBlock->blocksize * superBlock->i_blocks), SEEK_CUR);
+   fread(node, sizeof(struct inode), 1, fileImage);
    return EXIT_SUCCESS;
 }
 
@@ -268,22 +279,44 @@ void printVerbose() {
    printf("  zones          %u\n", superBlock->zones);
    printf("  blocksize      %u\n", superBlock->blocksize);
    printf("  subversion     %u\n", superBlock->subversion);
-   /*
+   
    printf("Computed Fields:\n");
-   printf("  version       %u\n", 99999);
-   printf("  firstImap       %u\n", 99999);
-   printf("  firstZmap       %u\n", 99999);
-   printf("  firstIblock       %u\n", 2 + 
+   printf("  version        %u\n", MINIX_VERSION);
+   printf("  firstImap      %u\n", 2 + superBlock->i_blocks + superBlock->z_blocks);
+   printf("  firstZmap      %u\n", 99999);
+   printf("  firstIblock    %u\n", 2 + 
          superBlock->i_blocks + superBlock->z_blocks);
    printf("  zonesize       %u\n", 
          superBlock->blocksize << superBlock->log_zone_size);
-   printf("  ptrs_per_zone       %u\n", 99999);
-   printf("  ino_per_block       %lu\n", 
+   printf("  ptrs_per_zone  %u\n", 99999);
+   printf("  ino_per_block  %u\n", 
          superBlock->blocksize / sizeof(struct inode));
-   printf("  wrongended       %u\n", 999999);
-   printf("  fileent_size       %u\n", 99999);
-   printf("  max_filename       %u\n", 99999);
-   printf("  ent_per_zone       %u\n", 99999);*/
+   printf("  wrongended     %u\n", ENDIANNESS);
+   printf("  fileent_size   %u\n", DIRECTORY_ENTRY_SIZE);
+   printf("  max_filename   %u\n", FILENAME_LENGTH);
+   printf("  ent_per_zone   %u\n", 99999);
+
+   /* Print inode */
+   printf("\nFile inode:\n");
+   printf("  unsigned short mode     0x%x (TODO)\n", node->mode);
+   printf("  unsigned short links    %d\n", node->links);
+   printf("  unsigned short uid      %d\n", node->uid);
+   printf("  unsigned short gid      %d\n", node->gid);
+   printf("  uint32_t size           %u\n", node->size);
+   printf("  uint32_t atime          %u\n", node->atime);
+   printf("  uint32_t mtime          %u\n", node->mtime);
+   printf("  uint32_t ctime          %u\n", node->ctime);  
+   printf("\n");
+   printf("  Direct Zones\n");
+   printf("\t\tzone[0]    =     %u\n", node->zone[0]);  
+   printf("\t\tzone[1]    =     %u\n", node->zone[1]);
+   printf("\t\tzone[2]    =     %u\n", node->zone[2]);  
+   printf("\t\tzone[3]    =     %u\n", node->zone[3]);  
+   printf("\t\tzone[4]    =     %u\n", node->zone[4]);  
+   printf("\t\tzone[5]    =     %u\n", node->zone[5]);  
+   printf("\t\tzone[6]    =     %u\n", node->zone[6]);      
+   printf("\tuint32_t indirect  =     %u\n", node->indirect);      
+   printf("\tuint32_t double    =     %u\n", node->two_indirect);
 }
 
 void printHelp() {

@@ -29,6 +29,9 @@
 #define BOOT_SECTOR_BYTE_510_VAL 0x55
 #define BOOT_SECTOR_BYTE_511_VAL 0xAA
 
+/* Minix 3 constants */
+#define MINIX_VERSION 3
+#define ENDIANNESS 0 /* little endian */
 #define SECTOR_SIZE 512
 #define INODE_SIZE 64
 #define DIRECTORY_ENTRY_SIZE 64
@@ -70,18 +73,19 @@ struct superblock { /* Minix Version 3 Superblock
 };
 
 struct inode {
-   uint16_t mode;  /* mode            */
-   uint16_t links; /* number or links */
-   uint16_t uid;
-   uint16_t gid;
-   uint32_t size;
-   int32_t atime;
-   int32_t mtime;
-   int32_t ctime;
-   uint32_t zone[DIRECT_ZONES];
-   uint32_t indirect;
-   uint32_t two_indirect;
-   uint32_t unused;
+   uint16_t mode;               /* mode                                     */
+   uint16_t links;              /* number or links                          */
+   uint16_t uid;                /* id of user who owns file                 */
+   uint16_t gid;                /* owner's group                            */
+   uint32_t size;               /* file size, num of bytes in the file      */
+   int32_t atime;               /* access time in seconds since Jan 1, 1970 */
+   int32_t mtime;               /* modification time                        */
+   int32_t ctime;               /* status change time                       */
+   uint32_t zone[DIRECT_ZONES]; /* zone numbers for the first seven data 
+                                   zones in the file                        */
+   uint32_t indirect;           /* used for files larger than 7 zones       */
+   uint32_t two_indirect;       /* same as above                            */
+   uint32_t unused;             /* could be used for triple indirect zone   */
 };
 
 struct directoryEntry {
