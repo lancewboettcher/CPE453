@@ -1,7 +1,11 @@
 //TODO: read path from command line
 //TODO: add 4 primary partition tables
 //TODO: add subpartition table functionality
+#ifndef FILESYSTEM_H
+#define FILESYSTEM_H
 #include "filesystem.h"
+#endif
+#include "inode.h"
 
 #define TRUE 1
 #define FALSE 0
@@ -74,7 +78,7 @@ int main (int argc, char *argv[]) {
 
       i++;
    }
-
+   printInode();
    /* i should be pointing to last argument at this point */
    fileName = argv[i];
 
