@@ -78,7 +78,6 @@ int main (int argc, char *argv[]) {
 
       i++;
    }
-   printInode();
    /* i should be pointing to last argument at this point */
    fileName = argv[i];
 
@@ -116,9 +115,6 @@ int main (int argc, char *argv[]) {
 
 int initFileSystem(FILE *fileImage, int whichPartition, 
       int whichSubPartition) {
-   //TODO: CHECK THE BOOT IMAGE (See comment below)
-   /* First check the boot block for magic number */
-
    int i;
 
    /* Initialize the blocks */
@@ -210,15 +206,14 @@ int initFileSystem(FILE *fileImage, int whichPartition,
       return BAD_MAGIC_NUMBER;
    }
 
-   //initInode();
-   /* TODO: MOVE THIS TO ANOTHER FUNCTION */
-   node = malloc(sizeof(struct inode));
-   uint32_t addr = superBlock->blocksize * (2 * superBlock->i_blocks + superBlock->z_blocks);
-   addr += sizeof(struct inode) * (1 - 1);
+   if (whichSubPartition >= 0) {
+      node = getInode(fileImage, superBlock, 
+            subPartitionTable[whichSubPartition]->lFirst);
+   }
+   else {
+      node = getInode(fileImage, superBlock, 0);
+   }
 
-   fseek(fileImage, superBlock->blocksize * 2, SEEK_SET);
-   fseek(fileImage, (superBlock->blocksize * superBlock->z_blocks) + (superBlock->blocksize * superBlock->i_blocks), SEEK_CUR);
-   fread(node, sizeof(struct inode), 1, fileImage);
    return EXIT_SUCCESS;
 }
 
@@ -286,8 +281,8 @@ void printVerbose() {
    
    printf("Computed Fields:\n");
    printf("  version        %u\n", MINIX_VERSION);
-   printf("  firstImap      %u\n", 2 + superBlock->i_blocks + superBlock->z_blocks);
-   printf("  firstZmap      %u\n", 99999);
+   printf("  firstImap      %u\n", INODE_BITMAP_BLOCK);
+   printf("  firstZmap      %u\n", ZNODE_BITMAP_BLOCK);
    printf("  firstIblock    %u\n", 2 + 
          superBlock->i_blocks + superBlock->z_blocks);
    printf("  zonesize       %u\n", 
@@ -301,27 +296,8 @@ void printVerbose() {
    printf("  ent_per_zone   %u\n", 99999);
 
    /* Print inode */
-   printf("\nFile inode:\n");
-   printf("  unsigned short mode     0x%x (TODO)\n", node->mode);
-   printf("  unsigned short links    %d\n", node->links);
-   printf("  unsigned short uid      %d\n", node->uid);
-   printf("  unsigned short gid      %d\n", node->gid);
-   printf("  uint32_t size           %u\n", node->size);
-   printf("  uint32_t atime          %u\n", node->atime);
-   printf("  uint32_t mtime          %u\n", node->mtime);
-   printf("  uint32_t ctime          %u\n", node->ctime);  
-   printf("\n");
-   printf("  Direct Zones\n");
-   printf("\t\tzone[0]    =     %u\n", node->zone[0]);  
-   printf("\t\tzone[1]    =     %u\n", node->zone[1]);
-   printf("\t\tzone[2]    =     %u\n", node->zone[2]);  
-   printf("\t\tzone[3]    =     %u\n", node->zone[3]);  
-   printf("\t\tzone[4]    =     %u\n", node->zone[4]);  
-   printf("\t\tzone[5]    =     %u\n", node->zone[5]);  
-   printf("\t\tzone[6]    =     %u\n", node->zone[6]);      
-   printf("\tuint32_t indirect  =     %u\n", node->indirect);      
-   printf("\tuint32_t double    =     %u\n", node->two_indirect);
-}
+   printInode(node);
+  }
 
 void printHelp() {
    printf("usage: minls [ -v ] [ -p num [ -s num ] ] imagefile [ path ]\n");

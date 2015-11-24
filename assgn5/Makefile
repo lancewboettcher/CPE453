@@ -4,8 +4,8 @@
 
 all: minls minget
 
-minls: minls.c filesystem.h
-	gcc -Wall -Werror -o minls minls.c
+minls: minls.c filesystem.h inode.c
+	gcc -Wall -Werror -o minls inode.c minls.c
 
 minget: minget.c filesystem.h
 	gcc -Wall -Werror -o minget minget.c

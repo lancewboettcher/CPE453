@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <inttypes.h>
+#include <string.h>
+#include <time.h>
 
 /* File Types */
 #define FILE_TYPE_MASK 0170000 
@@ -38,6 +40,9 @@
 #define FILENAME_LENGTH 60
 #define DIRECT_ZONES 7
 #define NUM_PRIMARY_PARTITONS 4
+#define PERMISSIONS_LENGTH 10
+#define INODE_BITMAP_BLOCK 2
+#define ZNODE_BITMAP_BLOCK 3
 
 struct partitionEntry {
    uint8_t bootind;       /* Boot magic number (0x80 if bootable) */
