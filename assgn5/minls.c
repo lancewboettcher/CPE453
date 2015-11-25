@@ -21,6 +21,7 @@ struct inode *node = NULL;
 
 /* Function Prototypes */
 void printHelp(void);
+void printPartitionTable(void);
 void printVerbose(void);
 int initFileSystem(FILE *, int, int);
 
@@ -214,10 +215,29 @@ int initFileSystem(FILE *fileImage, int whichPartition,
       node = getInode(fileImage, superBlock, 0);
    }
 
+   int p = 8;
+   fseek(fileImage, superBlock->firstdata * (superBlock->blocksize << superBlock->log_zone_size), SEEK_SET);
+   while (p--) {
+   struct directoryEntry *dir = malloc(sizeof(struct directoryEntry));
+   fread(dir, sizeof(struct directoryEntry), 1, fileImage);
+
+   printf("inode is %d, name is %s\n", dir->inode, dir->filename);
+   }
    return EXIT_SUCCESS;
 }
 
 void printVerbose() {
+   /* Print partition/subpartition tables if any */
+   printPartitionTable();
+
+   /* Print superblokc contents */
+   printSuperblock(superBlock);
+
+   /* Print inode */
+   printInode(node);
+  }
+
+void printPartitionTable() {
    int i;
 
    if (*partitionTable != NULL) {
@@ -263,41 +283,7 @@ void printVerbose() {
             subPartitionTable[i]->size);
       }
    }
-
-   printf("\nSuperblock Contents:\n");
-   printf("Stored Fields:\n");
-   printf("  ninodes        %u\n", superBlock->ninodes);
-   printf("  i_blocks       %u\n", superBlock->i_blocks);
-   printf("  z_blocks       %u\n", superBlock->z_blocks);
-   printf("  firstdata      %u\n", superBlock->firstdata);
-   printf("  log_zone_size  %u (zone size: %u)\n",
-    superBlock->log_zone_size, 
-    superBlock->blocksize << superBlock->log_zone_size);
-   printf("  max_file       %u\n", superBlock->max_file);
-   printf("  magic          0x%x\n", superBlock->magic);
-   printf("  zones          %u\n", superBlock->zones);
-   printf("  blocksize      %u\n", superBlock->blocksize);
-   printf("  subversion     %u\n", superBlock->subversion);
-   
-   printf("Computed Fields:\n");
-   printf("  version        %u\n", MINIX_VERSION);
-   printf("  firstImap      %u\n", INODE_BITMAP_BLOCK);
-   printf("  firstZmap      %u\n", ZNODE_BITMAP_BLOCK);
-   printf("  firstIblock    %u\n", 2 + 
-         superBlock->i_blocks + superBlock->z_blocks);
-   printf("  zonesize       %u\n", 
-         superBlock->blocksize << superBlock->log_zone_size);
-   printf("  ptrs_per_zone  %u\n", 99999);
-   printf("  ino_per_block  %u\n", 
-         superBlock->blocksize / sizeof(struct inode));
-   printf("  wrongended     %u\n", ENDIANNESS);
-   printf("  fileent_size   %u\n", DIRECTORY_ENTRY_SIZE);
-   printf("  max_filename   %u\n", FILENAME_LENGTH);
-   printf("  ent_per_zone   %u\n", 99999);
-
-   /* Print inode */
-   printInode(node);
-  }
+}
 
 void printHelp() {
    printf("usage: minls [ -v ] [ -p num [ -s num ] ] imagefile [ path ]\n");
