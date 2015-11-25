@@ -34,6 +34,7 @@
 /* Minix 3 constants */
 #define MINIX_VERSION 3
 #define ENDIANNESS 0 /* little endian */
+#define PTRS_PER_ZONE 1024
 #define SECTOR_SIZE 512
 #define INODE_SIZE 64
 #define DIRECTORY_ENTRY_SIZE 64

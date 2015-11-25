@@ -1,11 +1,13 @@
 //TODO: read path from command line
 //TODO: add 4 primary partition tables
 //TODO: add subpartition table functionality
+//TODO: check for errors in every malloc
 #ifndef FILESYSTEM_H
 #define FILESYSTEM_H
 #include "filesystem.h"
 #endif
 #include "inode.h"
+#include "superblock.h"
 
 #define TRUE 1
 #define FALSE 0
@@ -20,6 +22,7 @@ struct partitionEntry *subPartitionTable[4] = {NULL};
 struct inode *node = NULL;
 
 /* Function Prototypes */
+void printDirectories(FILE*, int, int);
 void printHelp(void);
 void printPartitionTable(void);
 void printVerbose(void);
@@ -79,15 +82,33 @@ int main (int argc, char *argv[]) {
 
       i++;
    }
-   /* i should be pointing to last argument at this point */
-   fileName = argv[i];
+    
+   /* i should be pointing to last argument at this point, if it
+    * isnt, that means this command has a path specified */
+   if (i != argc - 1) {
+      /* malloc space for file name because we'll have to concatenate it */
+      /* add the 1 at the end to leave space for the NULL and the '/' */
+      
+      fileName = malloc(sizeof(char) * FILENAME_LENGTH);
+      
+      /* Check if filename has a leading '/' if not, add it */
+      if (argv[i][0] == '/') {
+         sprintf(fileName, "%s%s", argv[argc - 1], argv[i]);
+      }
+      else {
+         sprintf(fileName, "%s/%s", argv[argc - 1], argv[i]);
+      }
+   }
+   else {
+      fileName = argv[i];
+   }
 
    /* Open file image for reading */
    fileImage = fopen(fileName, "r");
 
    /* Checking if file was opened */
    if (fileImage == NULL) {
-      fprintf(stderr, "Unable to open file specified\n");
+      fprintf(stderr, "Unable to open disk image \"%s\".\n", argv[i]);
 
       return EXIT_FAILURE;
    }
@@ -110,6 +131,7 @@ int main (int argc, char *argv[]) {
       printVerbose();
    }
 
+   printDirectories(fileImage, whichPartition, whichSubPartition);
    fclose(fileImage);
    return EXIT_SUCCESS;
 }
@@ -118,9 +140,6 @@ int initFileSystem(FILE *fileImage, int whichPartition,
       int whichSubPartition) {
    int i;
 
-   /* Initialize the blocks */
-   superBlock = malloc(sizeof(struct superblock));   
-   
    /* If a partitition was specified, check the partition table for validity */
    if (whichPartition >= 0) {
       uint8_t bootSectValidation510, bootSectValidation511;
@@ -145,15 +164,15 @@ int initFileSystem(FILE *fileImage, int whichPartition,
 
          fread(partitionTable[i], sizeof(struct partitionEntry), 1,
                fileImage);
-
+         
          /* Check if the partition table is valid before proceeding */
-         if (i == whichPartition && 
+         /*if (i == whichPartition && 
                (partitionTable[i]->bootind != BOOTABLE_MAGIC_NUM 
             || partitionTable[i]->type != MINIX_PARTITION_TYPE)) {
             fprintf(stderr, "Invalid partition table.\n");
 
             return INVALID_PARTITION;
-         }
+         }*/
       }
    }
 
@@ -185,20 +204,8 @@ int initFileSystem(FILE *fileImage, int whichPartition,
       }
    }
 
-   /* If no partiton table, seek to the next block (boot block is 2 sectors),
-    * else use the subpartition specified and seek to that boot block */
-   if (whichSubPartition >= 0) {
-      fseek(fileImage, SECTOR_SIZE * 
-            subPartitionTable[whichSubPartition]->lFirst, SEEK_SET);
-      
-      /* Seek past the 1KB of boot sector */
-      fseek(fileImage, SECTOR_SIZE * 2, SEEK_CUR);
-   }
-   else {
-      fseek(fileImage, SECTOR_SIZE * 2, SEEK_SET);
-   }
-
-   fread(superBlock, sizeof(struct superblock), 1, fileImage);
+   superBlock = getSuperblock(fileImage, whichPartition, partitionTable, 
+         whichSubPartition, subPartitionTable);
 
    if (superBlock->magic != MAGIC_NUMBER) {
       fprintf(stderr, "Bad magic number. (0x%.4u)\n", superBlock->magic);
@@ -207,23 +214,63 @@ int initFileSystem(FILE *fileImage, int whichPartition,
       return BAD_MAGIC_NUMBER;
    }
 
-   if (whichSubPartition >= 0) {
-      node = getInode(fileImage, superBlock, 
-            subPartitionTable[whichSubPartition]->lFirst);
-   }
+   //if (whichSubPartition >= 0) {
+      node = getInode(fileImage, superBlock, whichPartition, partitionTable,
+            whichSubPartition, subPartitionTable, 0);
+   /*}
    else {
-      node = getInode(fileImage, superBlock, 0);
-   }
+      node = getInode(fileImage, superBlock, 0, 0);
+   }*/
 
-   int p = 8;
-   fseek(fileImage, superBlock->firstdata * (superBlock->blocksize << superBlock->log_zone_size), SEEK_SET);
-   while (p--) {
-   struct directoryEntry *dir = malloc(sizeof(struct directoryEntry));
-   fread(dir, sizeof(struct directoryEntry), 1, fileImage);
-
-   printf("inode is %d, name is %s\n", dir->inode, dir->filename);
-   }
    return EXIT_SUCCESS;
+}
+
+void printDirectories(FILE *fileImage, 
+                      int whichPartition, 
+                      int whichSubPartition) {
+   printf("/:\n");
+   
+   fseek(fileImage, 0, SEEK_SET);
+
+   if (whichPartition >= 0) {
+      fseek(fileImage, SECTOR_SIZE * 
+            partitionTable[whichPartition]->lFirst, SEEK_SET);
+   }
+
+   if (whichSubPartition >= 0) {
+      fseek(fileImage, SECTOR_SIZE * 
+            subPartitionTable[whichSubPartition]->lFirst, SEEK_SET);
+   }
+
+   /* Navigate to data zone */
+   fseek(fileImage, superBlock->firstdata * 
+         (superBlock->blocksize << superBlock->log_zone_size), SEEK_CUR);
+
+   /* Create a temp directory entry to store info */
+   struct directoryEntry *dir = malloc(sizeof(struct directoryEntry));
+   struct inode *tempNode;
+
+   int numDirectories = node->size / DIRECTORY_ENTRY_SIZE;
+   
+   while(numDirectories--) {
+      fread(dir, sizeof(struct directoryEntry), 1, fileImage);
+      
+      if (dir->inode != 0) {
+        // printf("inode is %d, name is %s\n", dir->inode, dir->filename);
+         
+         //if (whichSubPartition >= 0) {
+            tempNode = getInode(fileImage, superBlock, whichPartition,
+                  partitionTable, whichSubPartition, subPartitionTable,
+                  dir->inode);
+         /*}
+         else {
+            tempNode = getInode(fileImage, superBlock, 0, dir->inode);
+         }*/
+         
+         printf("%s\t%u %s\n", getPermissions(tempNode->mode), 
+               tempNode->size, dir->filename);
+      }
+   }
 }
 
 void printVerbose() {

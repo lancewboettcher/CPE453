@@ -1,11 +1,41 @@
 #include "inode.h"
 
-struct inode* getInode(FILE *fileImage, struct superblock *superBlock, 
-      uint32_t partitionOffset) {
+struct inode* getInode(FILE *fileImage, 
+                       struct superblock *superBlock, 
+                       int whichPartition, 
+                       struct partitionEntry **partitionTable, 
+                       int whichSubPartition, 
+                       struct partitionEntry **subPartitionTable, 
+                       uint32_t nodeOffset) {
    struct inode *node = malloc(sizeof(struct inode));
+  
+   /* Need to retain the file pointer for the sake of printing directories */
+   uint32_t prevFp = ftell(fileImage);
+
    
-   /* Seek to the partition offset (if any) */
-   fseek(fileImage, partitionOffset * SECTOR_SIZE, SEEK_SET);
+//   /* Seek to the partition offset (if any) */
+//   fseek(fileImage, partitionOffset * SECTOR_SIZE, SEEK_SET);
+//   /* Seek past the superblock and boot blocks */
+//   fseek(fileImage, superBlock->blocksize * 2, SEEK_CUR);
+
+   /* Set the file pointer to 0 */
+   fseek(fileImage, 0, SEEK_SET);
+
+   /* Check if there's a partitionTable and seek past it */
+   if (whichPartition >= 0) {
+      fseek(fileImage, partitionTable[whichPartition]->lFirst * 
+            SECTOR_SIZE, SEEK_SET);
+   }
+
+   /* Check if there's a subpartition table and seek past it */
+   /* Can't be an else if statement because some fileImages specify a partition
+    * and a subpartition table, need to seek to subpartition table in this case
+    */
+   if (whichSubPartition >= 0) {
+      fseek(fileImage, subPartitionTable[whichSubPartition]->lFirst *
+            SECTOR_SIZE, SEEK_SET);
+   }
+
    /* Seek past the superblock and boot blocks */
    fseek(fileImage, superBlock->blocksize * 2, SEEK_CUR);
 
@@ -13,7 +43,15 @@ struct inode* getInode(FILE *fileImage, struct superblock *superBlock,
    fseek(fileImage, (superBlock->blocksize * superBlock->z_blocks)
          + (superBlock->blocksize * superBlock->i_blocks), SEEK_CUR);
    
+   while (nodeOffset > 1) {
+      fseek(fileImage, sizeof(struct inode), SEEK_CUR);
+      nodeOffset--;
+   }
+
    fread(node, sizeof(struct inode), 1, fileImage);
+   
+   /* Return file pointer back to the position it was in before the call */
+   fseek(fileImage, prevFp, SEEK_SET);
    return node;
 }
 
@@ -49,8 +87,7 @@ char* getPermissions(uint16_t mode) {
    char *permissions = malloc(sizeof(unsigned char) * PERMISSIONS_LENGTH);
    uint32_t idx = 0;
 
-   memset(permissions, '-', sizeof(permissions));
-
+   memset(permissions, '-', PERMISSIONS_LENGTH);
    /* set directory bit */
    if (mode & DIRECTORY_MASK)
       permissions[idx] = 'd'; 
