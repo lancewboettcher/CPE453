@@ -5,6 +5,8 @@
 #include <string.h>
 #include <time.h>
 
+#define FILESYSTEM_H
+
 /* File Types */
 #define FILE_TYPE_MASK 0170000 
 #define REGULAR_FILE_MASK 0100000 
@@ -40,7 +42,7 @@
 #define DIRECTORY_ENTRY_SIZE 64
 #define FILENAME_LENGTH 60
 #define DIRECT_ZONES 7
-#define NUM_PRIMARY_PARTITONS 4
+#define NUM_PRIMARY_PARTITIONS 4
 #define PERMISSIONS_LENGTH 10
 #define INODE_BITMAP_BLOCK 2
 #define ZNODE_BITMAP_BLOCK 3
@@ -99,4 +101,10 @@ struct directoryEntry {
    unsigned char filename[FILENAME_LENGTH];  /* filename string */
 };
 
-extern int strsplit(char*, char*, char**);
+extern void printHelp(void);
+extern void printPartitionTable(struct partitionEntry**,
+      struct partitionEntry**);
+extern void printVerbose(struct partitionEntry**,
+      struct partitionEntry**, struct superblock*, struct inode*);
+extern void seekPastPartitions(FILE*, struct partitionEntry**, int,
+      struct partitionEntry**, int);

@@ -3,6 +3,8 @@
 #include "filesystem.h"
 #endif
 
+#define INODE_H
+
 extern struct inode* getInode(FILE*, struct superblock*, int, 
       struct partitionEntry**, int, struct partitionEntry**, uint32_t);
 extern void printInode(struct inode*);

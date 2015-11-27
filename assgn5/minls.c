@@ -3,11 +3,16 @@
 //TODO: add subpartition table functionality
 //TODO: check for errors in every malloc
 #ifndef FILESYSTEM_H
-#define FILESYSTEM_H
 #include "filesystem.h"
 #endif
+
+#ifndef INODE_H
 #include "inode.h"
+#endif
+
+#ifndef SUPERBLOCK_H
 #include "superblock.h"
+#endif 
 
 #define TRUE 1
 #define FALSE 0
@@ -24,9 +29,6 @@ struct inode *node = NULL;
 
 /* Function Prototypes */
 void printDirectories(FILE*, int, int, char*);
-void printHelp(void);
-void printPartitionTable(void);
-void printVerbose(void);
 int initFileSystem(FILE *, int, int, char *);
 int  navigatePath(FILE* fileImage,
                   int whichPartition, 
@@ -141,7 +143,7 @@ int main (int argc, char *argv[]) {
    }
 
    if (verbose) {
-      printVerbose();
+      printVerbose(partitionTable, subPartitionTable, superBlock, node);
    }
 
    printDirectories(fileImage, whichPartition, whichSubPartition, pathName);
@@ -172,7 +174,7 @@ int initFileSystem(FILE *fileImage, int whichPartition,
       /* Seek to partition sector and read the table */
       fseek(fileImage, PARTITION_TABLE_LOC, SEEK_SET);
 
-      for (i=0; i<NUM_PRIMARY_PARTITONS; i++) {
+      for (i=0; i<NUM_PRIMARY_PARTITIONS; i++) {
          partitionTable[i] = malloc(sizeof(struct partitionEntry));
 
          fread(partitionTable[i], sizeof(struct partitionEntry), 1,
@@ -199,7 +201,7 @@ int initFileSystem(FILE *fileImage, int whichPartition,
       fseek(fileImage, PARTITION_TABLE_LOC, SEEK_CUR);
 
       /* Read the subpartition table */
-      for (i=0; i<NUM_PRIMARY_PARTITONS; i++) {
+      for (i=0; i<NUM_PRIMARY_PARTITIONS; i++) {
          subPartitionTable[i] = malloc(sizeof(struct partitionEntry));
 
          fread(subPartitionTable[i], 
@@ -255,17 +257,9 @@ struct inode* getDirectory(FILE *fileImage,
    struct inode *nextDirNode = NULL;
    struct directoryEntry *dir = malloc(sizeof(struct inode));
    
-   fseek(fileImage, 0, SEEK_SET);
-
-   if (whichPartition >= 0) {
-      fseek(fileImage, SECTOR_SIZE * 
-         partitionTable[whichPartition]->lFirst, SEEK_SET);
-   }
-
-   if (whichSubPartition >= 0) {
-      fseek(fileImage, SECTOR_SIZE * 
-            subPartitionTable[whichSubPartition]->lFirst, SEEK_SET);
-   }
+   /* Set file pointer to past the partitions (if any) */
+   seekPastPartitions(fileImage, partitionTable, whichPartition,
+         subPartitionTable, whichSubPartition);
 
    /* Navigate to data zone */
    fseek(fileImage, dirNode->zone[0] * 
@@ -316,79 +310,7 @@ int navigatePath(FILE* fileImage,
       nextDir = strsep(&originalPath, "/");
    }
    
-  
    return EXIT_SUCCESS;
-   /*
-   if (whichPartition >= 0) {
-      fseek(fileImage, SECTOR_SIZE * 
-         partitionTable[whichPartition]->lFirst, SEEK_SET);
-   }
-
-   if (whichSubPartition >= 0) {
-      fseek(fileImage, SECTOR_SIZE * 
-            subPartitionTable[whichSubPartition]->lFirst, SEEK_SET);
-   }
-
-   fseek(fileImage, superBlock->firstdata * 
-         (superBlock->blocksize << superBlock->log_zone_size), SEEK_CUR);
-
-   struct directoryEntry *dir = malloc(sizeof(struct directoryEntry));
-   struct inode *tempNode;
-   char *dirName;
-
-   int numDirectories = node->size / DIRECTORY_ENTRY_SIZE;
-   
-   while(numDirectories--) {
-      fread(dir, sizeof(struct directoryEntry), 1, fileImage);
-      dirName = (char*)dir->filename;
-      
-      if (dir->inode != 0 && !strcmp(dirName, nextDir)) {
-         tempNode = getInode(fileImage, superBlock, whichPartition,
-                  partitionTable, whichSubPartition, subPartitionTable,
-                  dir->inode);
-         
-         printf("%s\t%u %s\n", getPermissions(tempNode->mode), 
-               tempNode->size, dir->filename);
-         printInode(tempNode);
-if (whichPartition >= 0) {
-      fseek(fileImage, SECTOR_SIZE * 
-         partitionTable[whichPartition]->lFirst, SEEK_SET);
-   }
-
-   if (whichSubPartition >= 0) {
-      fseek(fileImage, SECTOR_SIZE * 
-            subPartitionTable[whichSubPartition]->lFirst, SEEK_SET);
-   }
-*/
-   /* Navigate to data zone */
-   /*fseek(fileImage, tempNode->zone[0] * 
-         (superBlock->blocksize << superBlock->log_zone_size), SEEK_CUR);
-      int numDir2 = tempNode->size / DIRECTORY_ENTRY_SIZE;
-      while (numDir2--) {
-      fread(dir, sizeof(struct directoryEntry), 1, fileImage);
-      printf("name: %s, num: %d\n", dir->filename, dir->inode);
-      }*/
-         /*fseek(fileImage, 8493 * 
-            (superBlock->blocksize << superBlock->log_zone_size), SEEK_CUR);
-         int numDir2 = tempNode->size / DIRECTORY_ENTRY_SIZE;
-         printf("next dir size = %d\n", numDir2);
-         while (numDir2--) {
-            fread(dir, sizeof(struct directoryEntry), 1, fileImage);
-            printf("name: %s. inode: %d\n", dir->filename, dir->inode);
-            fseek(fileImage, sizeof(struct directoryEntry), SEEK_CUR);*/
-         /*tempNode = getInode(fileImage, superBlock, whichPartition,
-                  partitionTable, whichSubPartition, subPartitionTable,
-                  dir->inode);
- 
-         printf("%s\t%u %s\n", getPermissions(tempNode->mode), 
-               tempNode->size, dir->filename);
-
-         printInode(tempNode);
-         }*/
-/*        return; 
-      }
-   }*/
-
 }
 
 void printDirectories(FILE *fileImage, 
@@ -407,17 +329,9 @@ void printDirectories(FILE *fileImage,
       else
          printf("%s:\n", pathName);
       
-      fseek(fileImage, 0, SEEK_SET);
-
-      if (whichPartition >= 0) {
-         fseek(fileImage, SECTOR_SIZE * 
-               partitionTable[whichPartition]->lFirst, SEEK_SET);
-      }
-
-      if (whichSubPartition >= 0) {
-         fseek(fileImage, SECTOR_SIZE * 
-               subPartitionTable[whichSubPartition]->lFirst, SEEK_SET);
-      }
+      /* Set file pointer to past the partitions (if any) */
+      seekPastPartitions(fileImage, partitionTable, whichPartition,
+         subPartitionTable, whichSubPartition);
 
       /* Navigate to data zone */
       if (pathName) {
@@ -453,74 +367,4 @@ void printDirectories(FILE *fileImage,
          }
       }
    }
-}
-
-void printVerbose() {
-   /* Print partition/subpartition tables if any */
-   printPartitionTable();
-
-   /* Print superblokc contents */
-   printSuperblock(superBlock);
-
-   /* Print inode */
-   printInode(node);
-  }
-
-void printPartitionTable() {
-   int i;
-
-   if (*partitionTable != NULL) {
-      printf("\nPartition table:\n");
-      printf("       ----Start----      ------End------\n");
-      printf("  Boot head  sec  cyl Type head  sec  cyl      "
-            "First       Size\n");
-      for (i=0; i<NUM_PRIMARY_PARTITONS; i++) {
-         printf("  0x%.02x    %u    %u    %u 0x%.02x    %u   "
-               "%u  %u         %u      %u\n",
-            partitionTable[i]->bootind, 
-            partitionTable[i]->start_head, 
-            partitionTable[i]->start_sec,
-            partitionTable[i]->start_cyl, 
-            partitionTable[i]->type, 
-            partitionTable[i]->end_head,
-            partitionTable[i]->end_sec & 0x3F, 
-            ((partitionTable[i]->end_sec & 0xC0)<<2) + 
-            partitionTable[i]->end_cyl, 
-            partitionTable[i]->lFirst,
-            partitionTable[i]->size);
-      }
-   }
-
-   if (*subPartitionTable != NULL) {
-      printf("\nPartition table:\n");
-      printf("       ----Start----      ------End------\n");
-      printf("  Boot head  sec  cyl Type head  sec  cyl      "
-            "First       Size\n");
-      for (i=0; i<NUM_PRIMARY_PARTITONS; i++) {
-         printf("  0x%.02x    %u    %u    %u 0x%.02x    %u   %u  "
-               "%u         %u      %u\n",
-            subPartitionTable[i]->bootind, 
-            subPartitionTable[i]->start_head, 
-            subPartitionTable[i]->start_sec,
-            subPartitionTable[i]->start_cyl, 
-            subPartitionTable[i]->type, 
-            subPartitionTable[i]->end_head,
-            subPartitionTable[i]->end_sec & 0x3F, 
-            ((subPartitionTable[i]->end_sec & 0xC0)<<2) + 
-            subPartitionTable[i]->end_cyl, 
-            partitionTable[i]->lFirst, 
-            subPartitionTable[i]->size);
-      }
-   }
-}
-
-void printHelp() {
-   printf("usage: minls [ -v ] [ -p num [ -s num ] ] imagefile [ path ]\n");
-   printf("Options:\n");
-   printf("-p part    --- select partition for filesystem "
-            "(default: none)\n");
-   printf("-s sub     --- select subpartition for filesystem "
-            "(default: none)\n");
-   printf("-h help    --- print usage information and exit\n");
-   printf("-v verbose --- increase verbosity level\n");
 }

@@ -1,43 +1,105 @@
-#ifdef FILESYSTEM_H
-#define FILESYSTEM_H
 #include "filesystem.h"
+
+#ifndef INODE_H
+#include "inode.h"
 #endif
 
-int strsplit(char *toSplit, char *delimiter, char **stringList) {
-   //char *originalStr = strdup(toSplit);
-   /*char **splitList;
-   char *nextToken;
-   int numStrings = 0; 
+#ifndef SUPERBLOCK_H
+#include "superblock.h"
+#endif
 
-   while (nextToken = strsep(&toSplit != NULL) {
-       
-      numStrings++;
-   }*/
-   
-   
-   return 0;
+void printHelp() {
+   printf("usage: minls [ -v ] [ -p num [ -s num ] ] imagefile [ path ]\n");
+   printf("Options:\n");
+   printf("-p part    --- select partition for filesystem "
+         "(default: none)\n");
+   printf("-s sub     --- select subpartition for filesystem "
+       "(default: none)\n");
+   printf("-h help    --- print usage information and exit\n");
+   printf("-v verbose --- increase verbosity level\n");
 }
-/*
-char **strsplit(const char* str, const char* delim, size_t* numtokens) {
-   char *s = strdup(str);
-   size_t tokens_alloc = 1;
-   size_t tokens_used = 0;
-   char **tokens = calloc(tokens_alloc, sizeof(char*));
-   char *token, *rest = s;
-   while ((token = strsep(&rest, delim)) != NULL) {
-      if (tokens_used == tokens_alloc) {
-         tokens_alloc *= 2;
-         tokens = realloc(tokens, tokens_alloc * sizeof(char*));
+
+void printPartitionTable(struct partitionEntry **partitionTable,
+                         struct partitionEntry **subPartitionTable) {  
+   int i;
+
+   if (*partitionTable != NULL) {
+      printf("\nSubpartition table:\n");
+      printf("       ----Start----      ------End------\n");
+      printf("  Boot head  sec  cyl Type head  sec  cyl      "
+               "First       Size\n");
+      for (i=0; i<NUM_PRIMARY_PARTITIONS; i++) {
+         printf("  0x%.02x    %u    %u    %u 0x%.02x    %u   "
+                  "%u  %u         %u      %u\n",
+                  partitionTable[i]->bootind, 
+                  partitionTable[i]->start_head, 
+                  partitionTable[i]->start_sec,
+                  partitionTable[i]->start_cyl, 
+                  partitionTable[i]->type, 
+                  partitionTable[i]->end_head,
+                  partitionTable[i]->end_sec & 0x3F, 
+                  ((partitionTable[i]->end_sec & 0xC0)<<2) + 
+                  partitionTable[i]->end_cyl, 
+                  partitionTable[i]->lFirst,
+                  partitionTable[i]->size);
       }
-      tokens[tokens_used++] = strdup(token);
    }
-   if (tokens_used == 0) {
-      free(tokens);
-      tokens = NULL;
-   } else {
-      tokens = realloc(tokens, tokens_used * sizeof(char*));
+   
+   if (*subPartitionTable != NULL) {
+      printf("\nPartition table:\n");
+      printf("       ----Start----      ------End------\n");
+      printf("  Boot head  sec  cyl Type head  sec  cyl      "
+               "First       Size\n");
+      for (i=0; i<NUM_PRIMARY_PARTITIONS; i++) {
+         printf("  0x%.02x    %u    %u    %u 0x%.02x    %u   %u  "
+                  "%u         %u      %u\n",
+                  subPartitionTable[i]->bootind, 
+                  subPartitionTable[i]->start_head, 
+                  subPartitionTable[i]->start_sec,
+                  subPartitionTable[i]->start_cyl, 
+                  subPartitionTable[i]->type, 
+                  subPartitionTable[i]->end_head,
+                  subPartitionTable[i]->end_sec & 0x3F, 
+                  ((subPartitionTable[i]->end_sec & 0xC0)<<2) + 
+                  subPartitionTable[i]->end_cyl, 
+                  partitionTable[i]->lFirst, 
+                  subPartitionTable[i]->size);
+      }
    }
-   *numtokens = tokens_used;
-   free(s);
-   return tokens;
-}*/
+}
+
+void printVerbose(struct partitionEntry **partitionTable,
+                  struct partitionEntry **subPartitionTable,
+                  struct superblock *superBlock,
+                  struct inode *node) {
+   /* Print partition/subpartition tables if any */
+   printPartitionTable(partitionTable, subPartitionTable);
+
+   /* Print superblokc contents */
+   printSuperblock(superBlock);
+
+   /* Print inode */
+   printInode(node);
+}
+
+void seekPastPartitions(FILE *fileImage,
+                        struct partitionEntry **partitionTable,
+                        int whichPartition,
+                        struct partitionEntry **subPartitionTable,
+                        int whichSubPartition) {
+   /* Set the file pointer to the beginning of the file */
+   fseek(fileImage, 0, SEEK_SET);
+
+   /* If there is a partition table, seek past it */
+   if (whichPartition >= 0) {
+      fseek(fileImage, SECTOR_SIZE * partitionTable[whichPartition]->lFirst,
+            SEEK_SET);
+   }
+
+   /* If there is a subpartition table, seek past it */
+   if (whichSubPartition >= 0) {
+      fseek(fileImage, SECTOR_SIZE * 
+            subPartitionTable[whichSubPartition]->lFirst, SEEK_SET);
+   }
+
+}

@@ -1,5 +1,7 @@
 #include "superblock.h"
 
+#define SUPERBLOCK_H
+
 void printSuperblock(struct superblock *superBlock) {
    printf("\nSuperblock Contents:\n");
    printf("Stored Fields:\n");
