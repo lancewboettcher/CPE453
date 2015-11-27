@@ -22,18 +22,22 @@ struct partitionEntry *subPartitionTable[4] = {NULL};
 struct inode *node = NULL;
 
 /* Function Prototypes */
-void printDirectories(FILE*, int, int);
+void printDirectories(FILE*, int, int, char*);
 void printHelp(void);
 void printPartitionTable(void);
 void printVerbose(void);
-int initFileSystem(FILE *, int, int);
+int initFileSystem(FILE *, int, int, char *);
+void navigatePath(FILE* fileImage,
+                  int whichPartition, 
+                  int whichSubPartition, 
+                  char *pathName);
 
 int main (int argc, char *argv[]) {
    int i = 1;
    int errorMessage;
    int verbose = FALSE;
    int whichPartition = -1, whichSubPartition = -1;
-   char *fileName;
+   char *fileName, *pathName = NULL;
    FILE *fileImage;
 
    /* If number of command line arguments less than 2, not enough args for
@@ -92,8 +96,12 @@ int main (int argc, char *argv[]) {
       fileName = malloc(sizeof(char) * FILENAME_LENGTH);
       
       /* Check if filename has a leading '/' if not, add it */
-      if (argv[i][0] == '/') {
-         sprintf(fileName, "%s%s", argv[argc - 1], argv[i]);
+      if (argv[argc - 1][0] == '/') {
+         //sprintf(fileName, "%s%s", argv[argc - 1], argv[i]);
+         
+         pathName = argv[argc - 1];
+         fileName = argv[i];
+
       }
       else {
          sprintf(fileName, "%s/%s", argv[argc - 1], argv[i]);
@@ -115,7 +123,8 @@ int main (int argc, char *argv[]) {
    
    /* Error message handling */
    if ((errorMessage = 
-            initFileSystem(fileImage, whichPartition, whichSubPartition))) {
+            initFileSystem(fileImage, whichPartition, 
+               whichSubPartition, pathName))) {
          if (errorMessage == INVALID_PARTITION) {
             fprintf(stderr, "Unable to open disk image \"%s\".\n", fileName);
          }
@@ -131,13 +140,13 @@ int main (int argc, char *argv[]) {
       printVerbose();
    }
 
-   printDirectories(fileImage, whichPartition, whichSubPartition);
+   printDirectories(fileImage, whichPartition, whichSubPartition, pathName);
    fclose(fileImage);
    return EXIT_SUCCESS;
 }
 
 int initFileSystem(FILE *fileImage, int whichPartition, 
-      int whichSubPartition) {
+      int whichSubPartition, char *pathName) {
    int i;
 
    /* If a partitition was specified, check the partition table for validity */
@@ -222,19 +231,26 @@ int initFileSystem(FILE *fileImage, int whichPartition,
       node = getInode(fileImage, superBlock, 0, 0);
    }*/
 
+   if (pathName != NULL) {
+      navigatePath(fileImage, whichPartition, whichSubPartition, pathName);
+   }
+
    return EXIT_SUCCESS;
 }
 
-void printDirectories(FILE *fileImage, 
-                      int whichPartition, 
-                      int whichSubPartition) {
-   printf("/:\n");
+struct inode* getDirectory(FILE *fileImage,
+                           struct inode *dirNode,
+                           int whichPartition,
+                           int whichSubPartition,
+                           char *nextDir) {
+   int numDirectories;
+   char *dirName;
+   struct inode *nextDirNode = NULL;
+   struct directoryEntry *dir = malloc(sizeof(struct inode));
    
-   fseek(fileImage, 0, SEEK_SET);
-
    if (whichPartition >= 0) {
       fseek(fileImage, SECTOR_SIZE * 
-            partitionTable[whichPartition]->lFirst, SEEK_SET);
+         partitionTable[whichPartition]->lFirst, SEEK_SET);
    }
 
    if (whichSubPartition >= 0) {
@@ -243,32 +259,186 @@ void printDirectories(FILE *fileImage,
    }
 
    /* Navigate to data zone */
+   fseek(fileImage, dirNode->zone[0] * 
+         (superBlock->blocksize << superBlock->log_zone_size), SEEK_CUR);
+   
+   /* Calculate the number of directories in this data zone */
+   numDirectories = dirNode->size / DIRECTORY_ENTRY_SIZE;
+    
+   /* Read through the directory names and return the inode of the matched 
+    * directory */
+   while (numDirectories--) {
+      fread(dir, sizeof(struct directoryEntry), 1, fileImage);
+      
+      dirName = (char *)dir->filename;
+      printf("reading file %s, looking for %s\n", dirName, nextDir);
+      if (!strcmp(dirName, nextDir)) {
+         printf("GOT IN\n");
+         nextDirNode = getInode(fileImage, superBlock, whichPartition,
+                  partitionTable, whichSubPartition, subPartitionTable,
+                  dir->inode);      
+      }
+   }
+  printf("called\n"); 
+   if (nextDirNode == NULL) {
+      nextDirNode = dirNode;
+   }
+
+   return nextDirNode;
+}
+
+void navigatePath(FILE* fileImage,
+                  int whichPartition, 
+                  int whichSubPartition, 
+                  char *pathName) {
+   char *originalPath = strdup(pathName);
+   char *nextDir = "";
+   struct inode *nextNode;
+
+   while (!strcmp(nextDir, "")) {
+      nextDir = strsep(&originalPath, "/");
+   }
+   
+   while (nextDir) {
+  printf("nextdir is %s\n", nextDir); 
+      nextNode = getDirectory(fileImage, node, whichPartition,
+            whichSubPartition, nextDir);
+      
+      node = nextNode;
+      nextDir = strsep(&originalPath, "/");
+   }
+   
+  
+
+   /*
+   if (whichPartition >= 0) {
+      fseek(fileImage, SECTOR_SIZE * 
+         partitionTable[whichPartition]->lFirst, SEEK_SET);
+   }
+
+   if (whichSubPartition >= 0) {
+      fseek(fileImage, SECTOR_SIZE * 
+            subPartitionTable[whichSubPartition]->lFirst, SEEK_SET);
+   }
+
    fseek(fileImage, superBlock->firstdata * 
          (superBlock->blocksize << superBlock->log_zone_size), SEEK_CUR);
 
-   /* Create a temp directory entry to store info */
    struct directoryEntry *dir = malloc(sizeof(struct directoryEntry));
    struct inode *tempNode;
+   char *dirName;
 
    int numDirectories = node->size / DIRECTORY_ENTRY_SIZE;
    
    while(numDirectories--) {
       fread(dir, sizeof(struct directoryEntry), 1, fileImage);
+      dirName = (char*)dir->filename;
       
-      if (dir->inode != 0) {
-        // printf("inode is %d, name is %s\n", dir->inode, dir->filename);
-         
-         //if (whichSubPartition >= 0) {
-            tempNode = getInode(fileImage, superBlock, whichPartition,
+      if (dir->inode != 0 && !strcmp(dirName, nextDir)) {
+         tempNode = getInode(fileImage, superBlock, whichPartition,
                   partitionTable, whichSubPartition, subPartitionTable,
                   dir->inode);
-         /*}
-         else {
-            tempNode = getInode(fileImage, superBlock, 0, dir->inode);
-         }*/
          
          printf("%s\t%u %s\n", getPermissions(tempNode->mode), 
                tempNode->size, dir->filename);
+         printInode(tempNode);
+if (whichPartition >= 0) {
+      fseek(fileImage, SECTOR_SIZE * 
+         partitionTable[whichPartition]->lFirst, SEEK_SET);
+   }
+
+   if (whichSubPartition >= 0) {
+      fseek(fileImage, SECTOR_SIZE * 
+            subPartitionTable[whichSubPartition]->lFirst, SEEK_SET);
+   }
+*/
+   /* Navigate to data zone */
+   /*fseek(fileImage, tempNode->zone[0] * 
+         (superBlock->blocksize << superBlock->log_zone_size), SEEK_CUR);
+      int numDir2 = tempNode->size / DIRECTORY_ENTRY_SIZE;
+      while (numDir2--) {
+      fread(dir, sizeof(struct directoryEntry), 1, fileImage);
+      printf("name: %s, num: %d\n", dir->filename, dir->inode);
+      }*/
+         /*fseek(fileImage, 8493 * 
+            (superBlock->blocksize << superBlock->log_zone_size), SEEK_CUR);
+         int numDir2 = tempNode->size / DIRECTORY_ENTRY_SIZE;
+         printf("next dir size = %d\n", numDir2);
+         while (numDir2--) {
+            fread(dir, sizeof(struct directoryEntry), 1, fileImage);
+            printf("name: %s. inode: %d\n", dir->filename, dir->inode);
+            fseek(fileImage, sizeof(struct directoryEntry), SEEK_CUR);*/
+         /*tempNode = getInode(fileImage, superBlock, whichPartition,
+                  partitionTable, whichSubPartition, subPartitionTable,
+                  dir->inode);
+ 
+         printf("%s\t%u %s\n", getPermissions(tempNode->mode), 
+               tempNode->size, dir->filename);
+
+         printInode(tempNode);
+         }*/
+/*        return; 
+      }
+   }*/
+
+}
+
+void printDirectories(FILE *fileImage, 
+                      int whichPartition, 
+                      int whichSubPartition,
+                      char *pathName) {
+   /* If a pathname is specified, navigate to that path */
+   if (pathName && !(node->mode & DIRECTORY_MASK)) {
+       printf("%s\t%u %s\n", getPermissions(node->mode), 
+         node->size, pathName);
+   }
+   else {
+      /* If no path specified, start at the root */
+      if (!pathName)
+         printf("/:\n");
+      else
+      fseek(fileImage, 0, SEEK_SET);
+
+      if (whichPartition >= 0) {
+         fseek(fileImage, SECTOR_SIZE * 
+               partitionTable[whichPartition]->lFirst, SEEK_SET);
+      }
+
+      if (whichSubPartition >= 0) {
+         fseek(fileImage, SECTOR_SIZE * 
+               subPartitionTable[whichSubPartition]->lFirst, SEEK_SET);
+      }
+
+      /* Navigate to data zone */
+      if (pathName) {
+         fseek(fileImage, node->zone[0] * 
+            (superBlock->blocksize << superBlock->log_zone_size), SEEK_CUR);
+
+      }
+      else {
+         fseek(fileImage, superBlock->firstdata * 
+            (superBlock->blocksize << superBlock->log_zone_size), SEEK_CUR);
+      }
+
+      /* Create a temp directory entry to store info */
+      struct directoryEntry *dir = malloc(sizeof(struct directoryEntry));
+      struct inode *tempNode;
+      char *dirName;
+
+      int numDirectories = node->size / DIRECTORY_ENTRY_SIZE;
+      
+      while(numDirectories--) {
+         fread(dir, sizeof(struct directoryEntry), 1, fileImage);
+         dirName = (char*)dir->filename;
+
+         if (dir->inode != 0) {
+            tempNode = getInode(fileImage, superBlock, whichPartition,
+                     partitionTable, whichSubPartition, subPartitionTable,
+                     dir->inode);
+            
+            printf("%s\t%u %s\n", getPermissions(tempNode->mode), 
+                  tempNode->size, dir->filename);
+         }
       }
    }
 }

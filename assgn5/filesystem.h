@@ -98,3 +98,5 @@ struct directoryEntry {
    uint32_t inode;                          /* inode number    */
    unsigned char filename[FILENAME_LENGTH];  /* filename string */
 };
+
+extern int strsplit(char*, char*, char**);
