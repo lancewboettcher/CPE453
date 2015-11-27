@@ -26,6 +26,7 @@ struct superblock *superBlock = NULL;
 struct partitionEntry *partitionTable[4] = {NULL};
 struct partitionEntry *subPartitionTable[4] = {NULL};
 struct inode *node = NULL;
+FILE *destPath = NULL;
 
 /* Function Prototypes */
 void printDirectories(FILE*, int, int, char*);
@@ -93,22 +94,39 @@ int main (int argc, char *argv[]) {
    /* i should be pointing to last argument at this point, if it
     * isnt, that means this command has a path specified */
    if (i != argc - 1) {
-      /* malloc space for file name because we'll have to concatenate it */
-      /* add the 1 at the end to leave space for the NULL and the '/' */
       
       fileName = malloc(sizeof(char) * FILENAME_LENGTH);
       
-      /* Check if filename has a leading '/' if not, add it */
-      if (argv[argc - 1][0] == '/') {
-         //sprintf(fileName, "%s%s", argv[argc - 1], argv[i]);
-         
-         pathName = argv[argc - 1];
+      /* if there are 3 arguments after the flags end, that means the 
+       * very last argument is a file destination  path name */
+      if ((argc-1) - i >= 2) {
+         pathName = argv[i + 1];
          fileName = argv[i];
+         destPath = fopen(argv[argc - 1], "w");
 
+         if (destPath == NULL) {
+            fprintf(stderr, "There was an issue opening the destination "
+                  "path file\n");
+            return EXIT_FAILURE;
+         }
       }
       else {
-         sprintf(fileName, "%s/%s", argv[argc - 1], argv[i]);
+         /* No optional file path given, default to stdout */
+         /* Check if filename has a leading '/' if not, add it */
+         if (argv[argc - 1][0] == '/') {
+            //sprintf(fileName, "%s%s", argv[argc - 1], argv[i]);
+         
+            pathName = argv[argc - 1];
+            fileName = argv[i];
+
+         }
+         else {
+            sprintf(fileName, "%s/%s", argv[argc - 1], argv[i]);
+         }
+
       }
+      
+      
    }
    else {
       fileName = argv[i];
@@ -116,6 +134,12 @@ int main (int argc, char *argv[]) {
 
    /* Open file image for reading */
    fileImage = fopen(fileName, "r");
+
+   /* if destination path is still null, that means no destination path
+    * specified, default to stdout */
+   if (destPath == NULL) {
+      destPath = stdout;
+   }
 
    /* Checking if file was opened */
    if (fileImage == NULL) {
@@ -144,6 +168,11 @@ int main (int argc, char *argv[]) {
 
    if (verbose) {
       printVerbose(partitionTable, subPartitionTable, superBlock, node);
+   }
+ 
+   if (!(node->mode & REGULAR_FILE_MASK)) {
+         fprintf(destPath, "%s: Not a regular file.\n", pathName);
+         return EXIT_FAILURE;
    }
 
    printDirectories(fileImage, whichPartition, whichSubPartition, pathName);
@@ -330,51 +359,8 @@ void printDirectories(FILE *fileImage,
             (superBlock->blocksize << superBlock->log_zone_size), SEEK_CUR);
 
        fread(fileOutput, sizeof(fileOutput), 1, fileImage);
-       printf("%s", fileOutput);
+       fwrite(fileOutput, 1, node->size, destPath);
    }
    else {
-      /* If no path specified, start at the root */
-      if (!pathName)
-         printf("/:\n");
-      else
-         printf("%s:\n", pathName);
-      
-      /* Set file pointer to past the partitions (if any) */
-      seekPastPartitions(fileImage, partitionTable, whichPartition,
-         subPartitionTable, whichSubPartition);
-
-      /* Navigate to data zone */
-      if (pathName) {
-         fseek(fileImage, node->zone[0] * 
-            (superBlock->blocksize << superBlock->log_zone_size), SEEK_CUR);
-
-      }
-      else {
-         fseek(fileImage, superBlock->firstdata * 
-            (superBlock->blocksize << superBlock->log_zone_size), SEEK_CUR);
-      }
-
-      /* Create a temp directory entry to store info */
-      struct directoryEntry *dir = malloc(sizeof(struct directoryEntry));
-      struct inode *tempNode;
-      char *dirName;
-
-      int numDirectories = node->size / DIRECTORY_ENTRY_SIZE;
-      
-      while(numDirectories--) {
-         fread(dir, sizeof(struct directoryEntry), 1, fileImage);
-         dirName = (char*)dir->filename;
-
-         if (dir->inode != 0) {
-            tempNode = getInode(fileImage, superBlock, whichPartition,
-                     partitionTable, whichSubPartition, subPartitionTable,
-                     dir->inode);
-            
-            printf("%s\t%u %s\n", getPermissions(tempNode->mode), 
-                  tempNode->size, dir->filename);
-
-            free(tempNode);
-         }
-      }
-   }
+        }
 }
