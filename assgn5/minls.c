@@ -14,6 +14,7 @@
 #define BYTESIZE 8
 #define BAD_MAGIC_NUMBER -1
 #define INVALID_PARTITION -2
+#define NO_FILE_FOUND -3
 
 /* Global Variables */
 struct superblock *superBlock = NULL;
@@ -27,7 +28,7 @@ void printHelp(void);
 void printPartitionTable(void);
 void printVerbose(void);
 int initFileSystem(FILE *, int, int, char *);
-void navigatePath(FILE* fileImage,
+int  navigatePath(FILE* fileImage,
                   int whichPartition, 
                   int whichSubPartition, 
                   char *pathName);
@@ -127,6 +128,9 @@ int main (int argc, char *argv[]) {
                whichSubPartition, pathName))) {
          if (errorMessage == INVALID_PARTITION) {
             fprintf(stderr, "Unable to open disk image \"%s\".\n", fileName);
+         }
+         else if (errorMessage == NO_FILE_FOUND) {
+            fprintf(stderr, "%s: File not found.\n", pathName);
          }
          else if (errorMessage != BAD_MAGIC_NUMBER) {
             fprintf(stderr, "An error occured when attempting to initialize "
@@ -232,7 +236,10 @@ int initFileSystem(FILE *fileImage, int whichPartition,
    }*/
 
    if (pathName != NULL) {
-      navigatePath(fileImage, whichPartition, whichSubPartition, pathName);
+      if (navigatePath(fileImage, whichPartition, 
+               whichSubPartition, pathName)) {
+         return NO_FILE_FOUND;
+      }
    }
 
    return EXIT_SUCCESS;
@@ -248,6 +255,8 @@ struct inode* getDirectory(FILE *fileImage,
    struct inode *nextDirNode = NULL;
    struct directoryEntry *dir = malloc(sizeof(struct inode));
    
+   fseek(fileImage, 0, SEEK_SET);
+
    if (whichPartition >= 0) {
       fseek(fileImage, SECTOR_SIZE * 
          partitionTable[whichPartition]->lFirst, SEEK_SET);
@@ -264,30 +273,24 @@ struct inode* getDirectory(FILE *fileImage,
    
    /* Calculate the number of directories in this data zone */
    numDirectories = dirNode->size / DIRECTORY_ENTRY_SIZE;
-    
+   
    /* Read through the directory names and return the inode of the matched 
     * directory */
    while (numDirectories--) {
       fread(dir, sizeof(struct directoryEntry), 1, fileImage);
       
       dirName = (char *)dir->filename;
-      printf("reading file %s, looking for %s\n", dirName, nextDir);
       if (!strcmp(dirName, nextDir)) {
-         printf("GOT IN\n");
          nextDirNode = getInode(fileImage, superBlock, whichPartition,
                   partitionTable, whichSubPartition, subPartitionTable,
                   dir->inode);      
       }
    }
-  printf("called\n"); 
-   if (nextDirNode == NULL) {
-      nextDirNode = dirNode;
-   }
 
    return nextDirNode;
 }
 
-void navigatePath(FILE* fileImage,
+int navigatePath(FILE* fileImage,
                   int whichPartition, 
                   int whichSubPartition, 
                   char *pathName) {
@@ -300,16 +303,21 @@ void navigatePath(FILE* fileImage,
    }
    
    while (nextDir) {
-  printf("nextdir is %s\n", nextDir); 
       nextNode = getDirectory(fileImage, node, whichPartition,
             whichSubPartition, nextDir);
+     
+      if (nextNode == NULL) {
+         return NO_FILE_FOUND;
+         
+      }
       
+      free(node);
       node = nextNode;
       nextDir = strsep(&originalPath, "/");
    }
    
   
-
+   return EXIT_SUCCESS;
    /*
    if (whichPartition >= 0) {
       fseek(fileImage, SECTOR_SIZE * 
@@ -397,6 +405,8 @@ void printDirectories(FILE *fileImage,
       if (!pathName)
          printf("/:\n");
       else
+         printf("%s:\n", pathName);
+      
       fseek(fileImage, 0, SEEK_SET);
 
       if (whichPartition >= 0) {
@@ -438,6 +448,8 @@ void printDirectories(FILE *fileImage,
             
             printf("%s\t%u %s\n", getPermissions(tempNode->mode), 
                   tempNode->size, dir->filename);
+
+            free(tempNode);
          }
       }
    }
