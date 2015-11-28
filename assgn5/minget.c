@@ -113,16 +113,10 @@ int main (int argc, char *argv[]) {
       else {
          /* No optional file path given, default to stdout */
          /* Check if filename has a leading '/' if not, add it */
-         if (argv[argc - 1][0] == '/') {
-            //sprintf(fileName, "%s%s", argv[argc - 1], argv[i]);
          
             pathName = argv[argc - 1];
             fileName = argv[i];
 
-         }
-         else {
-            sprintf(fileName, "%s/%s", argv[argc - 1], argv[i]);
-         }
 
       }
       
@@ -162,7 +156,7 @@ int main (int argc, char *argv[]) {
             fprintf(stderr, "An error occured when attempting to initialize "
                   "the file system\n");
          }
-
+printf("returning extit failure\n");
       return EXIT_FAILURE;
    }
 
@@ -276,42 +270,6 @@ int initFileSystem(FILE *fileImage, int whichPartition,
    return EXIT_SUCCESS;
 }
 
-struct inode* getDirectory(FILE *fileImage,
-                           struct inode *dirNode,
-                           int whichPartition,
-                           int whichSubPartition,
-                           char *nextDir) {
-   int numDirectories;
-   char *dirName;
-   struct inode *nextDirNode = NULL;
-   struct directoryEntry *dir = malloc(sizeof(struct inode));
-   
-   /* Set file pointer to past the partitions (if any) */
-   seekPastPartitions(fileImage, partitionTable, whichPartition,
-         subPartitionTable, whichSubPartition);
-
-   /* Navigate to data zone */
-   fseek(fileImage, dirNode->zone[0] * 
-         (superBlock->blocksize << superBlock->log_zone_size), SEEK_CUR);
-   
-   /* Calculate the number of directories in this data zone */
-   numDirectories = dirNode->size / DIRECTORY_ENTRY_SIZE;
-   
-   /* Read through the directory names and return the inode of the matched 
-    * directory */
-   while (numDirectories--) {
-      fread(dir, sizeof(struct directoryEntry), 1, fileImage);
-      
-      dirName = (char *)dir->filename;
-      if (!strcmp(dirName, nextDir)) {
-         nextDirNode = getInode(fileImage, superBlock, whichPartition,
-                  partitionTable, whichSubPartition, subPartitionTable,
-                  dir->inode);      
-      }
-   }
-
-   return nextDirNode;
-}
 
 int navigatePath(FILE* fileImage,
                   int whichPartition, 
@@ -326,8 +284,8 @@ int navigatePath(FILE* fileImage,
    }
    
    while (nextDir) {
-      nextNode = getDirectory(fileImage, node, whichPartition,
-            whichSubPartition, nextDir);
+      nextNode = getDirectory(fileImage, node, superBlock, partitionTable,
+            whichPartition, subPartitionTable, whichSubPartition, nextDir);
      
       if (nextNode == NULL) {
          return NO_FILE_FOUND;

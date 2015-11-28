@@ -108,3 +108,5 @@ extern void printVerbose(struct partitionEntry**,
       struct partitionEntry**, struct superblock*, struct inode*);
 extern void seekPastPartitions(FILE*, struct partitionEntry**, int,
       struct partitionEntry**, int);
+extern struct inode* getDirectory(FILE*, struct inode *, struct superblock *,
+      struct partitionEntry **, int, struct partitionEntry **, int, char *);

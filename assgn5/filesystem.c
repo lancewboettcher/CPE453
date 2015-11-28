@@ -24,7 +24,7 @@ void printPartitionTable(struct partitionEntry **partitionTable,
    int i;
 
    if (*partitionTable != NULL) {
-      printf("\nSubpartition table:\n");
+      printf("\nPartition table:\n");
       printf("       ----Start----      ------End------\n");
       printf("  Boot head  sec  cyl Type head  sec  cyl      "
                "First       Size\n");
@@ -46,7 +46,7 @@ void printPartitionTable(struct partitionEntry **partitionTable,
    }
    
    if (*subPartitionTable != NULL) {
-      printf("\nPartition table:\n");
+      printf("\nSubpartition table:\n");
       printf("       ----Start----      ------End------\n");
       printf("  Boot head  sec  cyl Type head  sec  cyl      "
                "First       Size\n");
@@ -102,4 +102,71 @@ void seekPastPartitions(FILE *fileImage,
             subPartitionTable[whichSubPartition]->lFirst, SEEK_SET);
    }
 
+}
+
+struct inode* getDirectory(FILE *fileImage,
+                           struct inode *dirNode,
+                           struct superblock *superBlock,
+                           struct partitionEntry **partitionTable,
+                           int whichPartition,
+                           struct partitionEntry **subPartitionTable,
+                           int whichSubPartition,
+                           char *nextDir) {
+      int numDirectories, numZones, zoneIdx = 0;
+      char *dirName;
+      struct inode *nextDirNode = NULL;
+      struct directoryEntry *dir = malloc(sizeof(struct inode));
+                  
+      /* Set file pointer to past the partitions (if any) */
+      seekPastPartitions(fileImage, partitionTable, whichPartition,
+      subPartitionTable, whichSubPartition);
+
+      /* Check to see how many zones we'll need to read */
+      /* if size of data is greater than the amount of space per zone,
+       * the we're going to need to traverse multiple blocks.
+       * NOTE: Need to add one to round up sizes in case of decimals */
+      numZones = (dirNode->size / 
+         (superBlock->blocksize << superBlock->log_zone_size)) + 1;
+      
+      while(numZones--) {
+                                
+         /* Calculate the number of directories in this data zone */
+         if (numZones) {
+            numDirectories = (superBlock->blocksize <<
+                  superBlock->log_zone_size) / DIRECTORY_ENTRY_SIZE;
+         }
+         else {
+            numDirectories = dirNode->size / DIRECTORY_ENTRY_SIZE;
+
+            if ((numDirectories * DIRECTORY_ENTRY_SIZE) >
+                  (superBlock->blocksize << superBlock->log_zone_size)) {
+               numDirectories %= DIRECTORY_ENTRY_SIZE;
+            }
+         }
+         
+         seekPastPartitions(fileImage, partitionTable, whichPartition,
+               subPartitionTable, whichSubPartition);
+
+         /* Navigate to data zone */
+         fseek(fileImage, dirNode->zone[zoneIdx] * 
+         (superBlock->blocksize << superBlock->log_zone_size), SEEK_CUR);
+         /* Read through the directory names and return the inode of the 
+          * matched directory */
+         while (numDirectories--) {
+            fread(dir, sizeof(struct directoryEntry), 1, fileImage);
+         
+            dirName = (char *)dir->filename;
+            //printf("%s\n", dirName);
+            if (!strcmp(dirName, nextDir) && dir->inode) {
+               nextDirNode = getInode(fileImage, superBlock, whichPartition,
+                  partitionTable, whichSubPartition, subPartitionTable,
+                  dir->inode);      
+            }  
+         }
+
+         /* Increment zone index to navigate to next zone */
+         zoneIdx++;
+      }
+
+      return nextDirNode;
 }
