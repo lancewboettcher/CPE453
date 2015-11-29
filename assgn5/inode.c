@@ -12,29 +12,9 @@ struct inode* getInode(FILE *fileImage,
    /* Need to retain the file pointer for the sake of printing directories */
    uint32_t prevFp = ftell(fileImage);
 
-   
-//   /* Seek to the partition offset (if any) */
-//   fseek(fileImage, partitionOffset * SECTOR_SIZE, SEEK_SET);
-//   /* Seek past the superblock and boot blocks */
-//   fseek(fileImage, superBlock->blocksize * 2, SEEK_CUR);
-
-   /* Set the file pointer to 0 */
-   fseek(fileImage, 0, SEEK_SET);
-
-   /* Check if there's a partitionTable and seek past it */
-   if (whichPartition >= 0) {
-      fseek(fileImage, partitionTable[whichPartition]->lFirst * 
-            SECTOR_SIZE, SEEK_SET);
-   }
-
-   /* Check if there's a subpartition table and seek past it */
-   /* Can't be an else if statement because some fileImages specify a partition
-    * and a subpartition table, need to seek to subpartition table in this case
-    */
-   if (whichSubPartition >= 0) {
-      fseek(fileImage, subPartitionTable[whichSubPartition]->lFirst *
-            SECTOR_SIZE, SEEK_SET);
-   }
+   /* Set the file pointer past the partitions (if any) */
+   seekPastPartitions(fileImage, partitionTable, whichPartition,
+         subPartitionTable, whichSubPartition);
 
    /* Seek past the superblock and boot blocks */
    fseek(fileImage, superBlock->blocksize * 2, SEEK_CUR);
@@ -53,6 +33,29 @@ struct inode* getInode(FILE *fileImage,
    /* Return file pointer back to the position it was in before the call */
    fseek(fileImage, prevFp, SEEK_SET);
    return node;
+}
+
+struct inode* getIndirectInode(FILE *fileImage, 
+                       struct superblock *superBlock, 
+                       int whichPartition, 
+                       struct partitionEntry **partitionTable, 
+                       int whichSubPartition, 
+                       struct partitionEntry **subPartitionTable, 
+                       uint32_t zone) {
+   struct inode *indirectNode = malloc(sizeof(struct inode));
+
+   /* Seek past the partitions */
+   seekPastPartitions(fileImage, partitionTable, whichPartition,
+         subPartitionTable, whichSubPartition);
+
+   /* Navigate to the data zone */
+   fseek(fileImage, zone * 
+         (superBlock->blocksize << superBlock->log_zone_size), SEEK_CUR);
+   
+   /* Read in the indirect zone */
+   fread(indirectNode, sizeof(struct inode), 1, fileImage);
+
+   return indirectNode;
 }
 
 void printInode(struct inode *node) {

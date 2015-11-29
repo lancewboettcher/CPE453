@@ -64,3 +64,12 @@ struct superblock* getSuperblock(FILE *fileImage,
 
    return superBlock;
 }
+
+uint32_t zoneSize(struct superblock *superBlock) {
+   return superBlock->blocksize << superBlock->log_zone_size;
+}
+
+uint32_t entriesPerZone(struct superblock *superBlock) {
+   return (superBlock->blocksize << 
+            superBlock->log_zone_size) / DIRECTORY_ENTRY_SIZE;
+}

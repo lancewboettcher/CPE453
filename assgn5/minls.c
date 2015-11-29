@@ -287,7 +287,8 @@ void printDirectories(FILE *fileImage,
    
    /* If a pathname is specified, navigate to that path */
    if (pathName && !(node->mode & DIRECTORY_MASK)) {
-       printf("%s\t%u %s\n", getPermissions(node->mode), 
+      //printInode(node); 
+      printf("%s\t%u %s\n", getPermissions(node->mode), 
          node->size, pathName);
    }
    else {
@@ -296,7 +297,7 @@ void printDirectories(FILE *fileImage,
          printf("/:\n");
       else
          printf("%s:\n", pathName);
-      
+
       /* Create a temp directory entry to store info */
       struct directoryEntry *dir = malloc(sizeof(struct directoryEntry));
       struct inode *tempNode;
@@ -307,19 +308,31 @@ void printDirectories(FILE *fileImage,
        * if it is we're going to need to loop through zones */
       numZones = (node->size /
             (superBlock->blocksize << superBlock->log_zone_size)) + 1;
-
+      
+      if (numZones > DIRECT_ZONES) {
+               numZones = DIRECT_ZONES;
+            }
+      
       while (numZones--) {
          if (numZones > 0) {
             /* numDirectories = entries per zone */
             numDirectories = (superBlock->blocksize << 
                   superBlock->log_zone_size) / DIRECTORY_ENTRY_SIZE;
+
+           
          }
          else {
             numDirectories = node->size / DIRECTORY_ENTRY_SIZE;
 
             if ((numDirectories * DIRECTORY_ENTRY_SIZE) > 
                   (superBlock->blocksize <<  superBlock->log_zone_size)) {
-               numDirectories %= DIRECTORY_ENTRY_SIZE;
+               if (node->indirect) {
+                  numDirectories = ((superBlock->blocksize << 
+                     superBlock->log_zone_size) / DIRECTORY_ENTRY_SIZE);
+               }
+               else {
+                  numDirectories %= DIRECTORY_ENTRY_SIZE;
+               }
             }
          }
 
@@ -341,7 +354,6 @@ void printDirectories(FILE *fileImage,
          while(numDirectories--) {
             fread(dir, sizeof(struct directoryEntry), 1, fileImage);
             dirName = (char*)dir->filename;
-
             if (dir->inode != 0) {
                tempNode = getInode(fileImage, superBlock, whichPartition,
                         partitionTable, whichSubPartition, subPartitionTable,
@@ -355,6 +367,57 @@ void printDirectories(FILE *fileImage,
          }
 
       zoneIdx++;
+      }
+      
+      if (node->indirect) {
+         /* Set file pointer to past the partitions (if any) */
+         seekPastPartitions(fileImage, partitionTable, whichPartition,
+            subPartitionTable, whichSubPartition); 
+
+         fseek(fileImage, node->indirect * zoneSize(superBlock), SEEK_CUR);
+
+         //uint32_t *newZone = malloc(sizeof(uint32_t));
+         
+         int numIndirectZones = (node->size / zoneSize(superBlock) ) + 1;
+         numIndirectZones -= DIRECT_ZONES;
+
+         uint32_t *indirectZones[numIndirectZones];
+         int i, numEntries;
+
+         for (i = 0; i < numIndirectZones; i++) {
+            indirectZones[i] = malloc(sizeof(uint32_t));
+
+            fread(indirectZones[i], sizeof(uint32_t), 1, fileImage);
+         }
+
+         for (i = 0; i < numIndirectZones; i++) {
+            /* Set file pointer to past the partitions (if any) */
+            seekPastPartitions(fileImage, partitionTable, whichPartition,
+               subPartitionTable, whichSubPartition); 
+
+            fseek(fileImage, *indirectZones[i] * zoneSize(superBlock), 
+                  SEEK_CUR);
+
+            numEntries = entriesPerZone(superBlock);
+
+            while (numEntries--) {
+               fread(dir, sizeof(struct directoryEntry), 1, fileImage);
+               
+               dirName = (char*)dir->filename;
+
+               if (dir->inode != 0) {
+                  tempNode = getInode(fileImage, superBlock, whichPartition,
+                           partitionTable, whichSubPartition, subPartitionTable,
+                           dir->inode);
+                  
+                  printf("%s\t%u %s\n", getPermissions(tempNode->mode), 
+                        tempNode->size, dir->filename);
+
+                  free(tempNode);
+               }
+  
+            }
+         }
       }
    }
 }
