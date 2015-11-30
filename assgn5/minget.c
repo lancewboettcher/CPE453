@@ -153,7 +153,6 @@ int main (int argc, char *argv[]) {
             fprintf(stderr, "An error occured when attempting to initialize "
                   "the file system\n");
          }
-printf("returning extit failure\n");
       return EXIT_FAILURE;
    }
 
@@ -201,14 +200,6 @@ int initFileSystem(FILE *fileImage, int whichPartition,
          fread(partitionTable[i], sizeof(struct partitionEntry), 1,
                fileImage);
          
-         /* Check if the partition table is valid before proceeding */
-         /*if (i == whichPartition && 
-               (partitionTable[i]->bootind != BOOTABLE_MAGIC_NUM 
-            || partitionTable[i]->type != MINIX_PARTITION_TYPE)) {
-            fprintf(stderr, "Invalid partition table.\n");
-
-            return INVALID_PARTITION;
-         }*/
       }
    }
 
@@ -242,15 +233,6 @@ int initFileSystem(FILE *fileImage, int whichPartition,
          fread(subPartitionTable[i], 
                sizeof(struct partitionEntry), 1, fileImage);
 
-         /* Check if the subpartition table is valid before proceeding */
-         //TODO: INCLUDE THIS ERROR CHECKING??
-         /*if (i == whichSubPartition && 
-          * (subPartitionTable[i]->bootind != BOOTABLE_MAGIC_NUM 
-            || subPartitionTable[i]->type != MINIX_PARTITION_TYPE)) {
-            fprintf(stderr, "Invalid partition table.\n");
-
-            return INVALID_PARTITION;
-         }*/
       }
    }
 
@@ -279,44 +261,117 @@ int initFileSystem(FILE *fileImage, int whichPartition,
    return EXIT_SUCCESS;
 }
 
-int getNumberOfIndirectZones(FILE* fileImage,
-                             int whichPartition,
-                             int whichSubPartition) {
-   int numZones = 0;
+int getNumberOfZones(FILE* fileImage) {
+   int numZones;
    
-    /* Set file pointer to past the partitions (if any) */
-    seekPastPartitions(fileImage, partitionTable, whichPartition,
-         subPartitionTable, whichSubPartition);
-
-   fseek(fileImage, node->indirect * zoneSize(superBlock), SEEK_CUR);
-
    if (node->size % zoneSize(superBlock)) {
       numZones = (node->size / zoneSize(superBlock)) + 1;
    }
    else {
       numZones = (node->size / zoneSize(superBlock));
    }
-   return numZones - DIRECT_ZONES;
+   return numZones;
 }
 
 void getFile(FILE *fileImage, 
                       int whichPartition, 
                       int whichSubPartition,
                       char *pathName) {
-   /* If a pathname is specified, navigate to that path */
-   if (!(node->mode & DIRECTORY_MASK)) {
-      char fileOutput[node->size];
-   /* Set file pointer to past the partitions (if any) */
+   char fileOutput[zoneSize(superBlock)];
+   int numberOfZones = getNumberOfZones(fileImage);
+   int zonesToRead, zoneIdx = 0, amountToRead, i;
+
+   if (numberOfZones > DIRECT_ZONES) {
+      zonesToRead = DIRECT_ZONES;
+   }
+   else {
+      zonesToRead = numberOfZones;
+   }
+   
+   if (zonesToRead == 1 ) {
+      amountToRead = node->size; 
+   }
+   else {
+      amountToRead = zoneSize(superBlock);
+   }
+
+   while (zonesToRead--) {
+      if (!zonesToRead && !node->indirect) {
+         amountToRead = node->size % zoneSize(superBlock);
+         
+         if (!amountToRead) {
+            amountToRead = zoneSize(superBlock);
+         }
+      }
+      
+      /* Set file pointer to past the partitions (if any) */
       seekPastPartitions(fileImage, partitionTable, whichPartition,
          subPartitionTable, whichSubPartition);
 
-      /* Navigate to data zone */
-         fseek(fileImage, node->zone[0] * 
-            (superBlock->blocksize << superBlock->log_zone_size), SEEK_CUR);
+      /* Navigate<S-F10> to data zone */
+      fseek(fileImage, node->zone[zoneIdx] * zoneSize(superBlock),
+         SEEK_CUR);
 
-       fread(fileOutput, sizeof(fileOutput), 1, fileImage);
-       fwrite(fileOutput, 1, node->size, destPath);
+      fread(fileOutput, amountToRead, 1, fileImage);
+      fwrite(fileOutput, 1, amountToRead, destPath);
+
+      zoneIdx++;
    }
-   else {
-        }
+   if (node->indirect) {
+      if (!node->two_indirect) {
+         zonesToRead = numberOfZones - DIRECT_ZONES; 
+      }
+      else {
+         fprintf(stderr, "INSERT MAX INDIRECT ZONES\n");
+      }
+      /* Set file pointer to past the partitions (if any) */
+      seekPastPartitions(fileImage, partitionTable, whichPartition,
+         subPartitionTable, whichSubPartition);
+      
+      fseek(fileImage, node->indirect * zoneSize(superBlock), SEEK_CUR);
+      
+      uint32_t *indirectZones[zonesToRead];
+      for (i = 0; i < zonesToRead; i++) {
+         indirectZones[i] = malloc(sizeof(uint32_t));
+         fread(indirectZones[i], sizeof(uint32_t), 1, fileImage);
+      }
+
+      zoneIdx = 0;
+      
+      if (zonesToRead == 1) {
+         amountToRead = node->size % zoneSize(superBlock);
+         
+         if (!amountToRead) {
+            amountToRead = zoneSize(superBlock);
+         }
+
+      }
+      else {
+         amountToRead = zoneSize(superBlock);
+      }
+
+      while(zonesToRead--) {
+         if (!zonesToRead && !node->two_indirect) {
+            amountToRead = node->size % zoneSize(superBlock);
+         
+            
+            if (!amountToRead) {
+               amountToRead = zoneSize(superBlock);
+            }
+         }
+
+         seekPastPartitions(fileImage, partitionTable, whichPartition,
+            subPartitionTable, whichSubPartition);
+      
+         fseek(fileImage, *indirectZones[zoneIdx] * zoneSize(superBlock), 
+               SEEK_CUR);
+         
+
+         fread(fileOutput, amountToRead, 1, fileImage);
+         fwrite(fileOutput, 1, amountToRead, destPath);
+
+         zoneIdx++;
+      }
+   }
+
 }
