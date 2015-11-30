@@ -47,6 +47,9 @@
 #define INODE_BITMAP_BLOCK 2
 #define ZNODE_BITMAP_BLOCK 3
 
+/* Errors */
+#define NO_FILE_FOUND -3
+
 struct partitionEntry {
    uint8_t bootind;       /* Boot magic number (0x80 if bootable) */
    uint8_t start_head;    /* Start of partition in CHS            */
@@ -111,5 +114,8 @@ extern void seekPastPartitions(FILE*, struct partitionEntry**, int,
 extern struct inode* getDirectory(FILE*, struct inode *, struct superblock *,
       struct partitionEntry **, int, struct partitionEntry **, int, char *);
 extern struct directoryEntry* getIndirectBlock(FILE*, struct inode *,
+      struct superblock *, struct partitionEntry **, int, 
+      struct partitionEntry **, int, char *);
+extern int navigatePath(FILE*, struct inode **,
       struct superblock *, struct partitionEntry **, int, 
       struct partitionEntry **, int, char *);

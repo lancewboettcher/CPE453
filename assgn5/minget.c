@@ -31,10 +31,6 @@ FILE *destPath = NULL;
 /* Function Prototypes */
 void printDirectories(FILE*, int, int, char*);
 int initFileSystem(FILE *, int, int, char *);
-int  navigatePath(FILE* fileImage,
-                  int whichPartition, 
-                  int whichSubPartition, 
-                  char *pathName);
 
 int main (int argc, char *argv[]) {
    int i = 1;
@@ -261,8 +257,9 @@ int initFileSystem(FILE *fileImage, int whichPartition,
    }*/
 
    if (pathName != NULL) {
-      if (navigatePath(fileImage, whichPartition, 
-               whichSubPartition, pathName)) {
+      if (navigatePath(fileImage, &node, superBlock, partitionTable,
+               whichPartition, subPartitionTable, whichSubPartition, 
+               pathName)) {
          return NO_FILE_FOUND;
       }
    }
@@ -270,35 +267,6 @@ int initFileSystem(FILE *fileImage, int whichPartition,
    return EXIT_SUCCESS;
 }
 
-
-int navigatePath(FILE* fileImage,
-                  int whichPartition, 
-                  int whichSubPartition, 
-                  char *pathName) {
-   char *originalPath = strdup(pathName);
-   char *nextDir = "";
-   struct inode *nextNode;
-
-   while (!strcmp(nextDir, "")) {
-      nextDir = strsep(&originalPath, "/");
-   }
-   
-   while (nextDir) {
-      nextNode = getDirectory(fileImage, node, superBlock, partitionTable,
-            whichPartition, subPartitionTable, whichSubPartition, nextDir);
-     
-      if (nextNode == NULL) {
-         return NO_FILE_FOUND;
-         
-      }
-      
-      free(node);
-      node = nextNode;
-      nextDir = strsep(&originalPath, "/");
-   }
-   
-   return EXIT_SUCCESS;
-}
 
 void printDirectories(FILE *fileImage, 
                       int whichPartition, 

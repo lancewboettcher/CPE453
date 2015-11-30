@@ -258,3 +258,43 @@ struct directoryEntry *getIndirectBlock(FILE *fileImage,
 
    return fileFound;
 }
+
+int navigatePath(FILE *fileImage,
+                 struct inode **origNode,
+                 struct superblock *superBlock,
+                 struct partitionEntry **partitionTable,
+                 int whichPartition,
+                 struct partitionEntry **subPartitionTable,
+                 int whichSubPartition,
+                 char *path) {
+   char *originalPath = strdup(path);
+   char *nextDir = "";
+   struct inode *nextNode;
+
+   while (!strcmp(nextDir, "")) {
+         nextDir = strsep(&originalPath, "/");
+      }
+   
+   while (nextDir) {
+      if (!((*origNode)->mode & DIRECTORY_MASK)) {
+         fprintf(stderr, "lookupdir: Not a directory\n");
+
+         return NO_FILE_FOUND;
+      }
+
+      nextNode = getDirectory(fileImage, *origNode, superBlock,
+                           partitionTable, whichPartition, subPartitionTable,
+                           whichSubPartition, nextDir);
+        
+         if (nextNode == NULL) {
+                  return NO_FILE_FOUND;
+                  
+         }
+         
+         free(*origNode);
+         *origNode = nextNode;
+         nextDir = strsep(&originalPath, "/");
+      }
+   
+   return EXIT_SUCCESS;}
+

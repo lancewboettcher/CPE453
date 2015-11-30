@@ -30,10 +30,6 @@ struct inode *node = NULL;
 /* Function Prototypes */
 void printDirectories(FILE*, int, int, char*);
 int initFileSystem(FILE *, int, int, char *);
-int  navigatePath(FILE* fileImage,
-                  int whichPartition, 
-                  int whichSubPartition, 
-                  char *pathName);
 
 int main (int argc, char *argv[]) {
    int i = 1;
@@ -180,17 +176,18 @@ int initFileSystem(FILE *fileImage, int whichPartition,
          fread(partitionTable[i], sizeof(struct partitionEntry), 1,
                fileImage);
          
-         /* Check if the partition table is valid before proceeding */
-         /*if (i == whichPartition && 
-               (partitionTable[i]->bootind != BOOTABLE_MAGIC_NUM 
-            || partitionTable[i]->type != MINIX_PARTITION_TYPE)) {
-            fprintf(stderr, "Invalid partition table.\n");
-
-            return INVALID_PARTITION;
-         }*/
+         
       }
-   }
+      
+      /* Check if the partition table is valid before proceeding */
+      if (partitionTable[whichPartition]->type != MINIX_PARTITION_TYPE) {
+         fprintf(stderr, "Not a Minix partition.\n");
 
+         return INVALID_PARTITION;
+      }
+
+   }
+   
    /* Search for sub partiton, if any */
    if (whichSubPartition >= 0) {
       /* Seek to the sector that lFirst of the specified partition points to */
@@ -238,42 +235,13 @@ int initFileSystem(FILE *fileImage, int whichPartition,
    }*/
 
    if (pathName != NULL) {
-      if (navigatePath(fileImage, whichPartition, 
-               whichSubPartition, pathName)) {
+      if (navigatePath(fileImage, &node, superBlock, partitionTable,
+               whichPartition, subPartitionTable, whichSubPartition, 
+               pathName)) {
          return NO_FILE_FOUND;
       }
    }
 
-   return EXIT_SUCCESS;
-}
-
-int navigatePath(FILE* fileImage,
-                  int whichPartition, 
-                  int whichSubPartition, 
-                  char *pathName) {
-   char *originalPath = strdup(pathName);
-   char *nextDir = "";
-   struct inode *nextNode;
-
-   while (!strcmp(nextDir, "")) {
-      nextDir = strsep(&originalPath, "/");
-   }
-   
-   while (nextDir) {
-      nextNode = getDirectory(fileImage, node, superBlock,
-            partitionTable, whichPartition, subPartitionTable,
-            whichSubPartition, nextDir);
-     
-      if (nextNode == NULL) {
-         return NO_FILE_FOUND;
-         
-      }
-      
-      free(node);
-      node = nextNode;
-      nextDir = strsep(&originalPath, "/");
-   }
-   
    return EXIT_SUCCESS;
 }
 
