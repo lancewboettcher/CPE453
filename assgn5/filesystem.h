@@ -110,3 +110,6 @@ extern void seekPastPartitions(FILE*, struct partitionEntry**, int,
       struct partitionEntry**, int);
 extern struct inode* getDirectory(FILE*, struct inode *, struct superblock *,
       struct partitionEntry **, int, struct partitionEntry **, int, char *);
+extern struct directoryEntry* getIndirectBlock(FILE*, struct inode *,
+      struct superblock *, struct partitionEntry **, int, 
+      struct partitionEntry **, int, char *);

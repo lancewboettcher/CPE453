@@ -113,34 +113,42 @@ struct inode* getDirectory(FILE *fileImage,
                            int whichSubPartition,
                            char *nextDir) {
       int numDirectories, numZones, zoneIdx = 0;
-      char *dirName;
+      char *directoryName;
       struct inode *nextDirNode = NULL;
-      struct directoryEntry *dir = malloc(sizeof(struct inode));
+      struct directoryEntry *directory = malloc(sizeof(struct inode));
                   
       /* Set file pointer to past the partitions (if any) */
       seekPastPartitions(fileImage, partitionTable, whichPartition,
-      subPartitionTable, whichSubPartition);
+         subPartitionTable, whichSubPartition);
 
       /* Check to see how many zones we'll need to read */
       /* if size of data is greater than the amount of space per zone,
        * the we're going to need to traverse multiple blocks.
        * NOTE: Need to add one to round up sizes in case of decimals */
-      numZones = (dirNode->size / 
-         (superBlock->blocksize << superBlock->log_zone_size)) + 1;
+      numZones = (dirNode->size / zoneSize(superBlock)) + 1;
       
+      if (numZones > DIRECT_ZONES) {
+         numZones = DIRECT_ZONES;
+      }
+
       while(numZones--) {
                                 
          /* Calculate the number of directories in this data zone */
          if (numZones) {
-            numDirectories = (superBlock->blocksize <<
-                  superBlock->log_zone_size) / DIRECTORY_ENTRY_SIZE;
+            numDirectories = zoneSize(superBlock) / DIRECTORY_ENTRY_SIZE;
          }
          else {
             numDirectories = dirNode->size / DIRECTORY_ENTRY_SIZE;
 
             if ((numDirectories * DIRECTORY_ENTRY_SIZE) >
-                  (superBlock->blocksize << superBlock->log_zone_size)) {
-               numDirectories %= DIRECTORY_ENTRY_SIZE;
+                  zoneSize(superBlock)) {
+               if (dirNode->indirect) {
+                  numDirectories = (zoneSize(superBlock) /
+                        DIRECTORY_ENTRY_SIZE);
+               }
+               else {
+                  numDirectories %= DIRECTORY_ENTRY_SIZE;
+               }
             }
          }
          
@@ -153,14 +161,14 @@ struct inode* getDirectory(FILE *fileImage,
          /* Read through the directory names and return the inode of the 
           * matched directory */
          while (numDirectories--) {
-            fread(dir, sizeof(struct directoryEntry), 1, fileImage);
+            fread(directory, sizeof(struct directoryEntry), 1, fileImage);
          
-            dirName = (char *)dir->filename;
+            directoryName = (char *)directory->filename;
             //printf("%s\n", dirName);
-            if (!strcmp(dirName, nextDir) && dir->inode) {
+            if (!strcmp(directoryName, nextDir) && directory->inode) {
                nextDirNode = getInode(fileImage, superBlock, whichPartition,
                   partitionTable, whichSubPartition, subPartitionTable,
-                  dir->inode);      
+                  directory->inode);      
             }  
          }
 
@@ -168,5 +176,85 @@ struct inode* getDirectory(FILE *fileImage,
          zoneIdx++;
       }
 
+      if (dirNode->indirect && !nextDirNode) {
+         struct directoryEntry *indirectDirectory = getIndirectBlock(fileImage,
+               dirNode, superBlock, partitionTable, whichPartition,
+               subPartitionTable, whichSubPartition, nextDir);
+
+         if (indirectDirectory != NULL) {
+            nextDirNode = getInode(fileImage, superBlock, whichPartition,
+                  partitionTable, whichSubPartition, subPartitionTable,
+                  indirectDirectory->inode);  
+         }
+      }
       return nextDirNode;
+}
+
+struct directoryEntry *getIndirectBlock(FILE *fileImage,
+                                    struct inode *node,
+                                    struct superblock *superBlock,
+                                    struct partitionEntry **partitionTable,
+                                    int whichPartition,
+                                    struct partitionEntry **subPartitionTable,
+                                    int whichSubPartition,
+                                    char *fileToGet) {
+
+   struct directoryEntry *dir = malloc(sizeof(struct directoryEntry)),
+      *fileFound = NULL;
+   struct inode *tempNode;
+   char *dirName;
+   
+   /* Set file pointer to past the partitions (if any) */
+   seekPastPartitions(fileImage, partitionTable, whichPartition,
+      subPartitionTable, whichSubPartition); 
+
+   fseek(fileImage, node->indirect * zoneSize(superBlock), SEEK_CUR);
+   
+   int numIndirectZones = (node->size / zoneSize(superBlock) ) + 1;
+   numIndirectZones -= DIRECT_ZONES;
+
+   uint32_t *indirectZones[numIndirectZones];
+   int i, numEntries;
+
+   for (i = 0; i < numIndirectZones; i++) {
+      indirectZones[i] = malloc(sizeof(uint32_t));
+      fread(indirectZones[i], sizeof(uint32_t), 1, fileImage);
+   }
+   
+   for (i = 0; i < numIndirectZones; i++) {     
+      /* Set file pointer to past the partitions (if any) */
+      seekPastPartitions(fileImage, partitionTable, whichPartition,
+         subPartitionTable, whichSubPartition); 
+
+      fseek(fileImage, *indirectZones[i] * zoneSize(superBlock), 
+         SEEK_CUR);
+
+      numEntries = entriesPerZone(superBlock);
+      
+      while (numEntries--) {      
+         fread(dir, sizeof(struct directoryEntry), 1, fileImage);
+         
+         dirName = (char*)dir->filename;
+
+         if (dir->inode != 0) {
+            tempNode = getInode(fileImage, superBlock, whichPartition,
+               partitionTable, whichSubPartition, subPartitionTable,
+               dir->inode);
+            
+            if (fileToGet == NULL) {
+               printf("%s\t%u %s\n", getPermissions(tempNode->mode), 
+                  tempNode->size, dir->filename);
+            }
+            else {
+               if (!strcmp(dirName, fileToGet)) {
+                  return dir;
+               }
+            }
+
+            free(tempNode);
+         }
+      }
+   }
+
+   return fileFound;
 }

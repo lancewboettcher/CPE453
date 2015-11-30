@@ -287,7 +287,6 @@ void printDirectories(FILE *fileImage,
    
    /* If a pathname is specified, navigate to that path */
    if (pathName && !(node->mode & DIRECTORY_MASK)) {
-      //printInode(node); 
       printf("%s\t%u %s\n", getPermissions(node->mode), 
          node->size, pathName);
    }
@@ -306,8 +305,7 @@ void printDirectories(FILE *fileImage,
 
       /* Check if the size od data is greater than the amount of one zone, 
        * if it is we're going to need to loop through zones */
-      numZones = (node->size /
-            (superBlock->blocksize << superBlock->log_zone_size)) + 1;
+      numZones = (node->size / zoneSize(superBlock)) + 1;
       
       if (numZones > DIRECT_ZONES) {
                numZones = DIRECT_ZONES;
@@ -316,8 +314,7 @@ void printDirectories(FILE *fileImage,
       while (numZones--) {
          if (numZones > 0) {
             /* numDirectories = entries per zone */
-            numDirectories = (superBlock->blocksize << 
-                  superBlock->log_zone_size) / DIRECTORY_ENTRY_SIZE;
+            numDirectories = zoneSize(superBlock) / DIRECTORY_ENTRY_SIZE;
 
            
          }
@@ -325,10 +322,10 @@ void printDirectories(FILE *fileImage,
             numDirectories = node->size / DIRECTORY_ENTRY_SIZE;
 
             if ((numDirectories * DIRECTORY_ENTRY_SIZE) > 
-                  (superBlock->blocksize <<  superBlock->log_zone_size)) {
+                  zoneSize(superBlock)) {
                if (node->indirect) {
-                  numDirectories = ((superBlock->blocksize << 
-                     superBlock->log_zone_size) / DIRECTORY_ENTRY_SIZE);
+                  numDirectories = (zoneSize(superBlock) /
+                        DIRECTORY_ENTRY_SIZE);
                }
                else {
                   numDirectories %= DIRECTORY_ENTRY_SIZE;
@@ -343,12 +340,12 @@ void printDirectories(FILE *fileImage,
          /* Navigate to data zone */
          if (pathName || zoneIdx) {
             fseek(fileImage, node->zone[zoneIdx] * 
-               (superBlock->blocksize << superBlock->log_zone_size), SEEK_CUR);
+              zoneSize(superBlock), SEEK_CUR);
 
          }
          else {
-            fseek(fileImage, superBlock->firstdata * 
-               (superBlock->blocksize << superBlock->log_zone_size), SEEK_CUR);
+            fseek(fileImage, superBlock->firstdata * zoneSize(superBlock), 
+                  SEEK_CUR);
          }
 
          while(numDirectories--) {
@@ -370,54 +367,10 @@ void printDirectories(FILE *fileImage,
       }
       
       if (node->indirect) {
-         /* Set file pointer to past the partitions (if any) */
-         seekPastPartitions(fileImage, partitionTable, whichPartition,
-            subPartitionTable, whichSubPartition); 
+         getIndirectBlock(fileImage, node, superBlock,
+            partitionTable, whichPartition, subPartitionTable,
+            whichSubPartition, NULL);
 
-         fseek(fileImage, node->indirect * zoneSize(superBlock), SEEK_CUR);
-
-         //uint32_t *newZone = malloc(sizeof(uint32_t));
-         
-         int numIndirectZones = (node->size / zoneSize(superBlock) ) + 1;
-         numIndirectZones -= DIRECT_ZONES;
-
-         uint32_t *indirectZones[numIndirectZones];
-         int i, numEntries;
-
-         for (i = 0; i < numIndirectZones; i++) {
-            indirectZones[i] = malloc(sizeof(uint32_t));
-
-            fread(indirectZones[i], sizeof(uint32_t), 1, fileImage);
-         }
-
-         for (i = 0; i < numIndirectZones; i++) {
-            /* Set file pointer to past the partitions (if any) */
-            seekPastPartitions(fileImage, partitionTable, whichPartition,
-               subPartitionTable, whichSubPartition); 
-
-            fseek(fileImage, *indirectZones[i] * zoneSize(superBlock), 
-                  SEEK_CUR);
-
-            numEntries = entriesPerZone(superBlock);
-
-            while (numEntries--) {
-               fread(dir, sizeof(struct directoryEntry), 1, fileImage);
-               
-               dirName = (char*)dir->filename;
-
-               if (dir->inode != 0) {
-                  tempNode = getInode(fileImage, superBlock, whichPartition,
-                           partitionTable, whichSubPartition, subPartitionTable,
-                           dir->inode);
-                  
-                  printf("%s\t%u %s\n", getPermissions(tempNode->mode), 
-                        tempNode->size, dir->filename);
-
-                  free(tempNode);
-               }
-  
-            }
-         }
       }
    }
 }
