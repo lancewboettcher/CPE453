@@ -27,9 +27,10 @@ struct partitionEntry *partitionTable[4] = {NULL};
 struct partitionEntry *subPartitionTable[4] = {NULL};
 struct inode *node = NULL;
 FILE *destPath = NULL;
+uint32_t *indirectZoneList = NULL;
 
 /* Function Prototypes */
-void printDirectories(FILE*, int, int, char*);
+void getFile(FILE*, int, int, char*);
 int initFileSystem(FILE *, int, int, char *);
 
 int main (int argc, char *argv[]) {
@@ -160,12 +161,13 @@ printf("returning extit failure\n");
       printVerbose(partitionTable, subPartitionTable, superBlock, node);
    }
  
-   if (!(node->mode & REGULAR_FILE_MASK)) {
+   if ((node->mode & FILE_TYPE_MASK) != REGULAR_FILE_MASK) {
          fprintf(destPath, "%s: Not a regular file.\n", pathName);
+         
          return EXIT_FAILURE;
    }
 
-   printDirectories(fileImage, whichPartition, whichSubPartition, pathName);
+   getFile(fileImage, whichPartition, whichSubPartition, pathName);
    fclose(fileImage);
    return EXIT_SUCCESS;
 }
@@ -173,10 +175,10 @@ printf("returning extit failure\n");
 int initFileSystem(FILE *fileImage, int whichPartition, 
       int whichSubPartition, char *pathName) {
    int i;
-
+   uint8_t bootSectValidation510, bootSectValidation511;
+   
    /* If a partitition was specified, check the partition table for validity */
    if (whichPartition >= 0) {
-      uint8_t bootSectValidation510, bootSectValidation511;
 
       fseek(fileImage, BOOT_SECTOR_BYTE_510, SEEK_SET);
       fread(&bootSectValidation510, sizeof(uint8_t), 1, fileImage);
@@ -215,7 +217,21 @@ int initFileSystem(FILE *fileImage, int whichPartition,
       /* Seek to the sector that lFirst of the specified partition points to */
       fseek(fileImage, SECTOR_SIZE * partitionTable[whichPartition]->lFirst, 
             SEEK_SET);
+      
+      fseek(fileImage, BOOT_SECTOR_BYTE_510, SEEK_CUR);
+      fread(&bootSectValidation510, sizeof(uint8_t), 1, fileImage);
+      fread(&bootSectValidation511, sizeof(uint8_t), 1, fileImage);
 
+      if (bootSectValidation510 != BOOT_SECTOR_BYTE_510_VAL ||
+            bootSectValidation511 != BOOT_SECTOR_BYTE_511_VAL) {
+         fprintf(stderr, "Partition table does not contain a "
+               "valid signature\n");
+
+         return INVALID_PARTITION;
+      }
+    
+      fseek(fileImage, SECTOR_SIZE * partitionTable[whichPartition]->lFirst, 
+            SEEK_SET);
       /* Now seek to the partition table of that sub partition */
       fseek(fileImage, PARTITION_TABLE_LOC, SEEK_CUR);
 
@@ -251,10 +267,6 @@ int initFileSystem(FILE *fileImage, int whichPartition,
    //if (whichSubPartition >= 0) {
       node = getInode(fileImage, superBlock, whichPartition, partitionTable,
             whichSubPartition, subPartitionTable, 0);
-   /*}
-   else {
-      node = getInode(fileImage, superBlock, 0, 0);
-   }*/
 
    if (pathName != NULL) {
       if (navigatePath(fileImage, &node, superBlock, partitionTable,
@@ -267,15 +279,33 @@ int initFileSystem(FILE *fileImage, int whichPartition,
    return EXIT_SUCCESS;
 }
 
+int getNumberOfIndirectZones(FILE* fileImage,
+                             int whichPartition,
+                             int whichSubPartition) {
+   int numZones = 0;
+   
+    /* Set file pointer to past the partitions (if any) */
+    seekPastPartitions(fileImage, partitionTable, whichPartition,
+         subPartitionTable, whichSubPartition);
 
-void printDirectories(FILE *fileImage, 
+   fseek(fileImage, node->indirect * zoneSize(superBlock), SEEK_CUR);
+
+   if (node->size % zoneSize(superBlock)) {
+      numZones = (node->size / zoneSize(superBlock)) + 1;
+   }
+   else {
+      numZones = (node->size / zoneSize(superBlock));
+   }
+   return numZones - DIRECT_ZONES;
+}
+
+void getFile(FILE *fileImage, 
                       int whichPartition, 
                       int whichSubPartition,
                       char *pathName) {
    /* If a pathname is specified, navigate to that path */
-   if (pathName && !(node->mode & DIRECTORY_MASK)) {
-       char fileOutput[node->size];
-
+   if (!(node->mode & DIRECTORY_MASK)) {
+      char fileOutput[node->size];
    /* Set file pointer to past the partitions (if any) */
       seekPastPartitions(fileImage, partitionTable, whichPartition,
          subPartitionTable, whichSubPartition);

@@ -150,10 +150,10 @@ int main (int argc, char *argv[]) {
 int initFileSystem(FILE *fileImage, int whichPartition, 
       int whichSubPartition, char *pathName) {
    int i;
-
+   uint8_t bootSectValidation510, bootSectValidation511;
+   
    /* If a partitition was specified, check the partition table for validity */
    if (whichPartition >= 0) {
-      uint8_t bootSectValidation510, bootSectValidation511;
 
       fseek(fileImage, BOOT_SECTOR_BYTE_510, SEEK_SET);
       fread(&bootSectValidation510, sizeof(uint8_t), 1, fileImage);
@@ -193,7 +193,20 @@ int initFileSystem(FILE *fileImage, int whichPartition,
       /* Seek to the sector that lFirst of the specified partition points to */
       fseek(fileImage, SECTOR_SIZE * partitionTable[whichPartition]->lFirst, 
             SEEK_SET);
+      
+      fseek(fileImage, BOOT_SECTOR_BYTE_510, SEEK_CUR);
+      fread(&bootSectValidation510, sizeof(uint8_t), 1, fileImage);
+      fread(&bootSectValidation511, sizeof(uint8_t), 1, fileImage);
 
+      if (bootSectValidation510 != BOOT_SECTOR_BYTE_510_VAL ||
+            bootSectValidation511 != BOOT_SECTOR_BYTE_511_VAL) {
+         fprintf(stderr, "Partition table does not contain a "
+               "valid signature\n");
+
+         return INVALID_PARTITION;
+      }
+      fseek(fileImage, SECTOR_SIZE * partitionTable[whichPartition]->lFirst, 
+            SEEK_SET);
       /* Now seek to the partition table of that sub partition */
       fseek(fileImage, PARTITION_TABLE_LOC, SEEK_CUR);
 

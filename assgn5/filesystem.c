@@ -281,7 +281,8 @@ int navigatePath(FILE *fileImage,
 
          return NO_FILE_FOUND;
       }
-
+      //printf("41ff %x\n", (*origNode)->mode & FILE_TYPE_MASK
+      //& REGULAR_FILE_MASK);
       nextNode = getDirectory(fileImage, *origNode, superBlock,
                            partitionTable, whichPartition, subPartitionTable,
                            whichSubPartition, nextDir);
@@ -291,6 +292,8 @@ int navigatePath(FILE *fileImage,
                   
          }
          
+      //printf("a1ff %x\n", nextNode->mode & FILE_TYPE_MASK 
+      //& REGULAR_FILE_MASK);
          free(*origNode);
          *origNode = nextNode;
          nextDir = strsep(&originalPath, "/");

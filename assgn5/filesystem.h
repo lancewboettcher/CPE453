@@ -9,7 +9,8 @@
 
 /* File Types */
 #define FILE_TYPE_MASK 0170000 
-#define REGULAR_FILE_MASK 0100000 
+#define REGULAR_FILE_MASK 0100000
+#define SYMBOLIC_LINK_MASK 0120000
 #define DIRECTORY_MASK 0040000 
 #define OWNER_RD_PERM 0000400 
 #define OWNER_WR_PERM 0000200 
@@ -49,6 +50,7 @@
 
 /* Errors */
 #define NO_FILE_FOUND -3
+#define NOT_REGULAR_FILE -4
 
 struct partitionEntry {
    uint8_t bootind;       /* Boot magic number (0x80 if bootable) */
