@@ -273,6 +273,64 @@ int getNumberOfZones(FILE* fileImage) {
    return numZones;
 }
 
+void readIndirectZones(FILE * fileImage,
+                       int whichPartition,
+                       int whichSubPartition,
+                       uint32_t zoneNumber,
+                       uint32_t amountOfZones) {
+      int i, amountToWrite, zoneIdx;
+      char output[zoneSize(superBlock)];
+
+      /* Set file pointer to past the partitions (if any) */
+      seekPastPartitions(fileImage, partitionTable, whichPartition,
+         subPartitionTable, whichSubPartition);
+      
+      fseek(fileImage, zoneNumber * zoneSize(superBlock), SEEK_CUR);
+      
+      uint32_t *indirectZones[amountOfZones];
+      for (i = 0; i < amountOfZones; i++) {
+         indirectZones[i] = malloc(sizeof(uint32_t));
+         fread(indirectZones[i], sizeof(uint32_t), 1, fileImage);
+      }
+
+      zoneIdx = 0;
+      
+      if (amountOfZones == 1) {
+         amountToWrite = node->size % zoneSize(superBlock);
+         
+         if (!amountToWrite) {
+            amountToWrite = zoneSize(superBlock);
+         }
+
+      }
+      else {
+         amountToWrite = zoneSize(superBlock);
+      }
+
+      while(amountOfZones--) {
+         if (!amountOfZones && !node->two_indirect) {
+            amountToWrite = node->size % zoneSize(superBlock);
+            
+            if (!amountToWrite) {
+               amountToWrite = zoneSize(superBlock);
+            }
+         }
+
+         seekPastPartitions(fileImage, partitionTable, whichPartition,
+            subPartitionTable, whichSubPartition);
+      
+         fseek(fileImage, *indirectZones[zoneIdx] * zoneSize(superBlock), 
+               SEEK_CUR);
+         
+
+         fread(output, amountToWrite, 1, fileImage);
+         fwrite(output, 1, amountToWrite, destPath);
+
+         zoneIdx++;
+      }
+
+}
+
 void getFile(FILE *fileImage, 
                       int whichPartition, 
                       int whichSubPartition,
@@ -317,23 +375,33 @@ void getFile(FILE *fileImage,
 
       zoneIdx++;
    }
+   
    if (node->indirect) {
       if (!node->two_indirect) {
          zonesToRead = numberOfZones - DIRECT_ZONES; 
       }
       else {
-         fprintf(stderr, "INSERT MAX INDIRECT ZONES\n");
+         zonesToRead = PTRS_PER_ZONE;
       }
+
+      readIndirectZones(fileImage, whichPartition, whichSubPartition,
+            node->indirect, zonesToRead);
+   }
+   
+   if (node->two_indirect) {
+      zonesToRead = numberOfZones - DIRECT_ZONES - PTRS_PER_ZONE; 
+      
       /* Set file pointer to past the partitions (if any) */
       seekPastPartitions(fileImage, partitionTable, whichPartition,
          subPartitionTable, whichSubPartition);
       
-      fseek(fileImage, node->indirect * zoneSize(superBlock), SEEK_CUR);
+      fseek(fileImage, node->two_indirect * zoneSize(superBlock), SEEK_CUR);
       
-      uint32_t *indirectZones[zonesToRead];
+      uint32_t *doubleIndirectZones[zonesToRead];
+      
       for (i = 0; i < zonesToRead; i++) {
-         indirectZones[i] = malloc(sizeof(uint32_t));
-         fread(indirectZones[i], sizeof(uint32_t), 1, fileImage);
+         doubleIndirectZones[i] = malloc(sizeof(uint32_t));
+         fread(doubleIndirectZones[i], sizeof(uint32_t), 1, fileImage);
       }
 
       zoneIdx = 0;
@@ -350,27 +418,11 @@ void getFile(FILE *fileImage,
          amountToRead = zoneSize(superBlock);
       }
 
-      while(zonesToRead--) {
-         if (!zonesToRead && !node->two_indirect) {
-            amountToRead = node->size % zoneSize(superBlock);
-         
-            
-            if (!amountToRead) {
-               amountToRead = zoneSize(superBlock);
-            }
-         }
+      for (i = 0; i < zonesToRead; i++) {
+         //TODO: CHANGE THE ZONESTOREAD TO SOMETHING THAT MAKES MORE SENSE
+         readIndirectZones(fileImage, whichPartition, whichSubPartition,
+            *doubleIndirectZones[i], zonesToRead);
 
-         seekPastPartitions(fileImage, partitionTable, whichPartition,
-            subPartitionTable, whichSubPartition);
-      
-         fseek(fileImage, *indirectZones[zoneIdx] * zoneSize(superBlock), 
-               SEEK_CUR);
-         
-
-         fread(fileOutput, amountToRead, 1, fileImage);
-         fwrite(fileOutput, 1, amountToRead, destPath);
-
-         zoneIdx++;
       }
    }
 
