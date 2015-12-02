@@ -82,6 +82,97 @@ void printVerbose(struct partitionEntry **partitionTable,
    printInode(node);
 }
 
+int checkPartitionMagic(FILE *fileImage,
+                        struct partitionEntry **partitionTable,
+                        int whichPartition) {
+   uint8_t bootSectValidation510, bootSectValidation511;
+
+   /* Seek to the sector that lFirst of the specified partition points to */
+   fseek(fileImage, SECTOR_SIZE * partitionTable[whichPartition]->lFirst, 
+   SEEK_SET);
+   
+   /* Read in byte 510 amd byte 511 */
+   fseek(fileImage, BOOT_SECTOR_BYTE_510, SEEK_CUR);
+   fread(&bootSectValidation510, sizeof(uint8_t), 1, fileImage);
+   fread(&bootSectValidation511, sizeof(uint8_t), 1, fileImage);
+   
+   /* Check that t bytes match the minix magic bytes */
+   if (bootSectValidation510 != BOOT_SECTOR_BYTE_510_VAL || 
+         bootSectValidation511 != BOOT_SECTOR_BYTE_511_VAL) {
+      fprintf(stderr, "Partition table does not contain a "
+            "valid signature\n");
+      return INVALID_PARTITION;
+   }
+
+   return EXIT_SUCCESS;
+}
+
+int getPartitionTables(FILE *fileImage,
+                        struct partitionEntry ***partitionTable,
+                        int whichPartition,
+                        struct partitionEntry ***subPartitionTable,
+                        int whichSubPartition) {
+   int i;
+   uint8_t bootSectValidation510, bootSectValidation511;
+   *partitionTable = malloc(sizeof(struct partitionEntry*) 
+         * NUM_PRIMARY_PARTITIONS);
+   
+   /* If a partitition was specified, check the partition table for validity */
+   if (whichPartition >= 0) {
+      /* Seek to partition sector and read the table */
+      fseek(fileImage, PARTITION_TABLE_LOC, SEEK_SET);
+
+      for (i=0; i<NUM_PRIMARY_PARTITIONS; i++) {
+         *partitionTable[i] = malloc(sizeof(struct partitionEntry));
+         
+         fread(partitionTable[i], sizeof(struct partitionEntry), 1,
+            fileImage);
+      }
+      
+      if ((*partitionTable[whichPartition])->type != MINIX_PARTITION_TYPE) {
+         fprintf(stderr, "Not a Minix partition\n");
+
+         return INVALID_PARTITION;
+      }
+   }
+
+   /* Search for sub partiton, if any */
+   if (whichSubPartition >= 0) {
+      /* Seek to the sector that lFirst of the specified partition points to */
+      fseek(fileImage, SECTOR_SIZE * (*partitionTable[whichPartition])->lFirst, 
+      SEEK_SET);
+                     
+      fseek(fileImage, BOOT_SECTOR_BYTE_510, SEEK_CUR);
+      fread(&bootSectValidation510, sizeof(uint8_t), 1, fileImage);
+      fread(&bootSectValidation511, sizeof(uint8_t), 1, fileImage);
+
+      if (bootSectValidation510 != BOOT_SECTOR_BYTE_510_VAL ||
+         bootSectValidation511 != BOOT_SECTOR_BYTE_511_VAL) {
+            fprintf(stderr, "Partition table does not contain a "
+            "valid signature\n");
+
+            return INVALID_PARTITION;
+      }   
+      
+      fseek(fileImage, SECTOR_SIZE * (*partitionTable[whichPartition])->lFirst, 
+            SEEK_SET);
+         
+      /* Now seek to the partition table of that sub partition */
+      fseek(fileImage, PARTITION_TABLE_LOC, SEEK_CUR);
+
+      /* Read the subpartition table */
+      for (i=0; i<NUM_PRIMARY_PARTITIONS; i++) {
+         *subPartitionTable[i] = malloc(sizeof(struct partitionEntry));
+
+         fread(subPartitionTable[i], sizeof(struct partitionEntry), 1,
+               fileImage);
+
+      }
+   }
+   
+   return EXIT_SUCCESS;
+}
+
 void seekPastPartitions(FILE *fileImage,
                         struct partitionEntry **partitionTable,
                         int whichPartition,
@@ -299,5 +390,20 @@ int navigatePath(FILE *fileImage,
          nextDir = strsep(&originalPath, "/");
       }
    
-   return EXIT_SUCCESS;}
+   return EXIT_SUCCESS;
+}
 
+int getNumberOfZones(FILE* fileImage,
+                     struct superblock *superBlock,
+                     struct inode *origNode) {
+   int numZones;
+         
+   if (origNode->size % zoneSize(superBlock)) {
+      numZones = (origNode->size / zoneSize(superBlock)) + 1;
+   }
+   else {
+      numZones = (origNode->size / zoneSize(superBlock));
+   }
+
+   return numZones;
+}

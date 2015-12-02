@@ -49,6 +49,8 @@
 #define ZNODE_BITMAP_BLOCK 3
 
 /* Errors */
+#define BAD_MAGIC_NUMBER -1
+#define INVALID_PARTITION -2
 #define NO_FILE_FOUND -3
 #define NOT_REGULAR_FILE -4
 
@@ -121,3 +123,7 @@ extern struct directoryEntry* getIndirectBlock(FILE*, struct inode *,
 extern int navigatePath(FILE*, struct inode **,
       struct superblock *, struct partitionEntry **, int, 
       struct partitionEntry **, int, char *);
+extern int  getPartitionTables(FILE*, struct partitionEntry***, int,
+      struct partitionEntry***, int);
+extern int getNumberOfZones(FILE*, struct superblock*, struct inode*);
+extern int checkPartitionMagic(FILE*, struct partitionEntry**, int);
