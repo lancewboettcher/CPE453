@@ -316,6 +316,8 @@ void readIndirectZones(FILE * fileImage,
          else {
             memset(output, '\0', zoneSize(superBlock));
             fwrite(output, 1, zoneSize(superBlock), destPath);
+
+            amountAlreadyRead += zoneSize(superBlock);
          }
          zoneIdx++;
       }
@@ -370,6 +372,8 @@ void getFile(FILE *fileImage,
       else {
          memset(fileOutput, '\0', zoneSize(superBlock));
          fwrite(fileOutput, 1, zoneSize(superBlock), destPath);
+
+         amountAlreadyRead += zoneSize(superBlock);
       }
       zoneIdx++;
    }
@@ -386,16 +390,20 @@ void getFile(FILE *fileImage,
             node->indirect, zonesToRead);
    }
    
+   
    if (node->two_indirect) {
-      if (!node->indirect) {
          char indirectZoneHole[zoneSize(superBlock) * PTRS_PER_ZONE];
+      if (!node->indirect) {
          memset(indirectZoneHole, '\0', zoneSize(superBlock) * PTRS_PER_ZONE);
          fwrite(indirectZoneHole, 1, sizeof(indirectZoneHole), destPath);
+         
+         amountAlreadyRead += sizeof(indirectZoneHole);
       }
-      
+
+
+      /*
       zonesToRead = numberOfZones - DIRECT_ZONES - PTRS_PER_ZONE; 
       
-      /* Set file pointer to past the partitions (if any) */
       seekPastPartitions(fileImage, partitionTable, whichPartition,
          subPartitionTable, whichSubPartition);
       
@@ -439,5 +447,89 @@ void getFile(FILE *fileImage,
 
       }
    }
+*/
 
+   int amountLeft = node->size - amountAlreadyRead;
+   int indirZonesToRead, doubleIndirZonesToRead;
+
+   if (amountLeft % zoneSize(superBlock)) {
+      zonesToRead = (amountLeft / zoneSize(superBlock)) + 1;
+   }
+   else {
+      zonesToRead = amountLeft / zoneSize(superBlock);
+   }
+            
+   if (zonesToRead <= PTRS_PER_ZONE) {
+      indirZonesToRead = zonesToRead;
+      doubleIndirZonesToRead = 1;
+   }
+   else {
+      if (zonesToRead % PTRS_PER_ZONE) {
+         indirZonesToRead = PTRS_PER_ZONE;
+         doubleIndirZonesToRead = (zonesToRead / PTRS_PER_ZONE) + 1;
+      }
+      else {
+         indirZonesToRead = PTRS_PER_ZONE;
+      }
+   }
+
+   /*fprintf(stderr, "zones to read %d\n", zonesToRead); 
+   *fprintf(stderr, "izones to read %d\n", indirZonesToRead); 
+   *fprintf(stderr, "dzones to read %d\n", doubleIndirZonesToRead);*/ 
+   /* Set file pointer to past the partitions (if any) */
+   seekPastPartitions(fileImage, partitionTable, whichPartition,
+   subPartitionTable, whichSubPartition);
+   
+   fseek(fileImage, node->two_indirect * zoneSize(superBlock), SEEK_CUR);
+  
+   uint32_t *doubleIndirectZones[doubleIndirZonesToRead];
+                                          
+   for (i = 0; i < doubleIndirZonesToRead; i++) {
+      doubleIndirectZones[i] = malloc(sizeof(uint32_t));
+      fread(doubleIndirectZones[i], sizeof(uint32_t), 1, fileImage);
+   }
+   
+   for (i = 0; i < doubleIndirZonesToRead; i++) {
+      amountLeft = node->size - amountAlreadyRead;
+      if (amountLeft % zoneSize(superBlock)) {
+         zonesToRead = (amountLeft / zoneSize(superBlock)) + 1;
+      }
+      else {
+         zonesToRead = amountLeft / zoneSize(superBlock);
+      }
+  
+      if (zonesToRead <= PTRS_PER_ZONE) {
+         indirZonesToRead = zonesToRead;
+      }
+      else {
+         if (zonesToRead % PTRS_PER_ZONE) {
+            indirZonesToRead = PTRS_PER_ZONE;
+         }
+         else {
+            indirZonesToRead = PTRS_PER_ZONE;
+         }
+      }
+ 
+//fprintf(stdout, "amount left = %d, amount read %d, zones %d\n",
+//amountLeft, amountAlreadyRead, indirZonesToRead);
+
+      if  (*doubleIndirectZones[i] == 0) {
+         memset(indirectZoneHole, '\0', zoneSize(superBlock) * 
+               PTRS_PER_ZONE);
+         fwrite(indirectZoneHole, 1, sizeof(indirectZoneHole), destPath);
+
+         amountAlreadyRead += sizeof(indirectZoneHole);
+      }
+      else {
+         readIndirectZones(fileImage, whichPartition, whichSubPartition,
+         *doubleIndirectZones[i], indirZonesToRead);
+      }
+   }
+
+
+   if (node->size != amountAlreadyRead) {
+      fprintf(stderr, "DID NOT READ EVERYTHING\n");
+      fprintf(stderr, "size: %d, read: %d\n", node->size, amountAlreadyRead);
+   }
+}
 }

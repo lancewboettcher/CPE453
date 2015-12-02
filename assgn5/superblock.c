@@ -24,16 +24,14 @@ void printSuperblock(struct superblock *superBlock) {
    printf("  firstZmap      %u\n", ZNODE_BITMAP_BLOCK);
    printf("  firstIblock    %u\n", 2 + 
       superBlock->i_blocks + superBlock->z_blocks);
-   printf("  zonesize       %u\n", 
-      superBlock->blocksize << superBlock->log_zone_size);
-   printf("  ptrs_per_zone  %u\n", PTRS_PER_ZONE);
+   printf("  zonesize       %u\n", zoneSize(superBlock));
+   printf("  ptrs_per_zone  %u\n", pointersPerZone(superBlock));
    printf("  ino_per_block  %u\n", 
       superBlock->blocksize / sizeof(struct inode));
    printf("  wrongended     %u\n", ENDIANNESS);
    printf("  fileent_size   %u\n", DIRECTORY_ENTRY_SIZE);
    printf("  max_filename   %u\n", FILENAME_LENGTH);
-   printf("  ent_per_zone   %u\n", (superBlock->blocksize << 
-            superBlock->log_zone_size) / DIRECTORY_ENTRY_SIZE);
+   printf("  ent_per_zone   %u\n", entriesPerZone(superBlock));
 }
 
 struct superblock* getSuperblock(FILE *fileImage, 
@@ -70,6 +68,9 @@ uint32_t zoneSize(struct superblock *superBlock) {
 }
 
 uint32_t entriesPerZone(struct superblock *superBlock) {
-   return (superBlock->blocksize << 
-            superBlock->log_zone_size) / DIRECTORY_ENTRY_SIZE;
+   return zoneSize(superBlock) / DIRECTORY_ENTRY_SIZE;
+}
+
+uint32_t pointersPerZone(struct superblock *superBlock) {
+   return zoneSize(superBlock) / sizeof(uint32_t);
 }
