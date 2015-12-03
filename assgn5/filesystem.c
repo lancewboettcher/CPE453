@@ -8,6 +8,10 @@
 #include "superblock.h"
 #endif
 
+#ifndef PARTITION_H
+#include "partition.h"
+#endif
+
 void printHelp() {
    printf("usage: minls [ -v ] [ -p num [ -s num ] ] imagefile [ path ]\n");
    printf("Options:\n");
@@ -19,57 +23,30 @@ void printHelp() {
    printf("-v verbose --- increase verbosity level\n");
 }
 
-void printPartitionTable(struct partitionEntry **partitionTable,
-                         struct partitionEntry **subPartitionTable) {  
-   int i;
+void seekPastPartitions(FILE *fileImage,
+                        struct partitionEntry *partitionTable,
+                        int whichPartition,
+                        struct partitionEntry *subPartitionTable,
+                        int whichSubPartition) {
+   /* Set the file pointer to the beginning of the file */
+   fseek(fileImage, 0, SEEK_SET);
 
-   if (*partitionTable != NULL) {
-      printf("\nPartition table:\n");
-      printf("       ----Start----      ------End------\n");
-      printf("  Boot head  sec  cyl Type head  sec  cyl      "
-               "First       Size\n");
-      for (i=0; i<NUM_PRIMARY_PARTITIONS; i++) {
-         printf("  0x%.02x    %u    %u    %u 0x%.02x    %u   "
-                  "%u  %u         %u      %u\n",
-                  partitionTable[i]->bootind, 
-                  partitionTable[i]->start_head, 
-                  partitionTable[i]->start_sec,
-                  partitionTable[i]->start_cyl, 
-                  partitionTable[i]->type, 
-                  partitionTable[i]->end_head,
-                  partitionTable[i]->end_sec & 0x3F, 
-                  ((partitionTable[i]->end_sec & 0xC0)<<2) + 
-                  partitionTable[i]->end_cyl, 
-                  partitionTable[i]->lFirst,
-                  partitionTable[i]->size);
-      }
+   /* If there is a partition table, seek past it */
+   if (whichPartition >= 0) {
+      fseek(fileImage, SECTOR_SIZE * partitionTable[whichPartition].lFirst,
+            SEEK_SET);
    }
-   
-   if (*subPartitionTable != NULL) {
-      printf("\nSubpartition table:\n");
-      printf("       ----Start----      ------End------\n");
-      printf("  Boot head  sec  cyl Type head  sec  cyl      "
-               "First       Size\n");
-      for (i=0; i<NUM_PRIMARY_PARTITIONS; i++) {
-         printf("  0x%.02x    %u    %u    %u 0x%.02x    %u   %u  "
-                  "%u         %u      %u\n",
-                  subPartitionTable[i]->bootind, 
-                  subPartitionTable[i]->start_head, 
-                  subPartitionTable[i]->start_sec,
-                  subPartitionTable[i]->start_cyl, 
-                  subPartitionTable[i]->type, 
-                  subPartitionTable[i]->end_head,
-                  subPartitionTable[i]->end_sec & 0x3F, 
-                  ((subPartitionTable[i]->end_sec & 0xC0)<<2) + 
-                  subPartitionTable[i]->end_cyl, 
-                  partitionTable[i]->lFirst, 
-                  subPartitionTable[i]->size);
-      }
+
+   /* If there is a subpartition table, seek past it */
+   if (whichSubPartition >= 0) {
+      fseek(fileImage, SECTOR_SIZE * 
+            subPartitionTable[whichSubPartition].lFirst, SEEK_SET);
    }
+
 }
 
-void printVerbose(struct partitionEntry **partitionTable,
-                  struct partitionEntry **subPartitionTable,
+void printVerbose(struct partitionEntry *partitionTable,
+                  struct partitionEntry *subPartitionTable,
                   struct superblock *superBlock,
                   struct inode *node) {
    /* Print partition/subpartition tables if any */
@@ -82,125 +59,14 @@ void printVerbose(struct partitionEntry **partitionTable,
    printInode(node);
 }
 
-int checkPartitionMagic(FILE *fileImage,
-                        struct partitionEntry **partitionTable,
-                        int whichPartition) {
-   uint8_t bootSectValidation510, bootSectValidation511;
 
-   /* Seek to the sector that lFirst of the specified partition points to */
-   fseek(fileImage, SECTOR_SIZE * partitionTable[whichPartition]->lFirst, 
-   SEEK_SET);
-   
-   /* Read in byte 510 amd byte 511 */
-   fseek(fileImage, BOOT_SECTOR_BYTE_510, SEEK_CUR);
-   fread(&bootSectValidation510, sizeof(uint8_t), 1, fileImage);
-   fread(&bootSectValidation511, sizeof(uint8_t), 1, fileImage);
-   
-   /* Check that t bytes match the minix magic bytes */
-   if (bootSectValidation510 != BOOT_SECTOR_BYTE_510_VAL || 
-         bootSectValidation511 != BOOT_SECTOR_BYTE_511_VAL) {
-      fprintf(stderr, "Partition table does not contain a "
-            "valid signature\n");
-      return INVALID_PARTITION;
-   }
-
-   return EXIT_SUCCESS;
-}
-
-int getPartitionTables(FILE *fileImage,
-                        struct partitionEntry ***partitionTable,
-                        int whichPartition,
-                        struct partitionEntry ***subPartitionTable,
-                        int whichSubPartition) {
-   int i;
-   uint8_t bootSectValidation510, bootSectValidation511;
-   *partitionTable = malloc(sizeof(struct partitionEntry*) 
-         * NUM_PRIMARY_PARTITIONS);
-   
-   /* If a partitition was specified, check the partition table for validity */
-   if (whichPartition >= 0) {
-      /* Seek to partition sector and read the table */
-      fseek(fileImage, PARTITION_TABLE_LOC, SEEK_SET);
-
-      for (i=0; i<NUM_PRIMARY_PARTITIONS; i++) {
-         *partitionTable[i] = malloc(sizeof(struct partitionEntry));
-         
-         fread(partitionTable[i], sizeof(struct partitionEntry), 1,
-            fileImage);
-      }
-      
-      if ((*partitionTable[whichPartition])->type != MINIX_PARTITION_TYPE) {
-         fprintf(stderr, "Not a Minix partition\n");
-
-         return INVALID_PARTITION;
-      }
-   }
-
-   /* Search for sub partiton, if any */
-   if (whichSubPartition >= 0) {
-      /* Seek to the sector that lFirst of the specified partition points to */
-      fseek(fileImage, SECTOR_SIZE * (*partitionTable[whichPartition])->lFirst, 
-      SEEK_SET);
-                     
-      fseek(fileImage, BOOT_SECTOR_BYTE_510, SEEK_CUR);
-      fread(&bootSectValidation510, sizeof(uint8_t), 1, fileImage);
-      fread(&bootSectValidation511, sizeof(uint8_t), 1, fileImage);
-
-      if (bootSectValidation510 != BOOT_SECTOR_BYTE_510_VAL ||
-         bootSectValidation511 != BOOT_SECTOR_BYTE_511_VAL) {
-            fprintf(stderr, "Partition table does not contain a "
-            "valid signature\n");
-
-            return INVALID_PARTITION;
-      }   
-      
-      fseek(fileImage, SECTOR_SIZE * (*partitionTable[whichPartition])->lFirst, 
-            SEEK_SET);
-         
-      /* Now seek to the partition table of that sub partition */
-      fseek(fileImage, PARTITION_TABLE_LOC, SEEK_CUR);
-
-      /* Read the subpartition table */
-      for (i=0; i<NUM_PRIMARY_PARTITIONS; i++) {
-         *subPartitionTable[i] = malloc(sizeof(struct partitionEntry));
-
-         fread(subPartitionTable[i], sizeof(struct partitionEntry), 1,
-               fileImage);
-
-      }
-   }
-   
-   return EXIT_SUCCESS;
-}
-
-void seekPastPartitions(FILE *fileImage,
-                        struct partitionEntry **partitionTable,
-                        int whichPartition,
-                        struct partitionEntry **subPartitionTable,
-                        int whichSubPartition) {
-   /* Set the file pointer to the beginning of the file */
-   fseek(fileImage, 0, SEEK_SET);
-
-   /* If there is a partition table, seek past it */
-   if (whichPartition >= 0) {
-      fseek(fileImage, SECTOR_SIZE * partitionTable[whichPartition]->lFirst,
-            SEEK_SET);
-   }
-
-   /* If there is a subpartition table, seek past it */
-   if (whichSubPartition >= 0) {
-      fseek(fileImage, SECTOR_SIZE * 
-            subPartitionTable[whichSubPartition]->lFirst, SEEK_SET);
-   }
-
-}
 
 struct inode* getDirectory(FILE *fileImage,
                            struct inode *dirNode,
                            struct superblock *superBlock,
-                           struct partitionEntry **partitionTable,
+                           struct partitionEntry *partitionTable,
                            int whichPartition,
-                           struct partitionEntry **subPartitionTable,
+                           struct partitionEntry *subPartitionTable,
                            int whichSubPartition,
                            char *nextDir) {
       int numDirectories, numZones, zoneIdx = 0;
@@ -216,7 +82,7 @@ struct inode* getDirectory(FILE *fileImage,
       /* if size of data is greater than the amount of space per zone,
        * the we're going to need to traverse multiple blocks.
        * NOTE: Need to add one to round up sizes in case of decimals */
-      numZones = (dirNode->size / zoneSize(superBlock)) + 1;
+      numZones = getNumberOfZones(fileImage, superBlock, dirNode);
       
       if (numZones > DIRECT_ZONES) {
          numZones = DIRECT_ZONES;
@@ -226,7 +92,7 @@ struct inode* getDirectory(FILE *fileImage,
                                 
          /* Calculate the number of directories in this data zone */
          if (numZones) {
-            numDirectories = zoneSize(superBlock) / DIRECTORY_ENTRY_SIZE;
+            numDirectories = entriesPerZone(superBlock);
          }
          else {
             numDirectories = dirNode->size / DIRECTORY_ENTRY_SIZE;
@@ -248,7 +114,7 @@ struct inode* getDirectory(FILE *fileImage,
 
          /* Navigate to data zone */
          fseek(fileImage, dirNode->zone[zoneIdx] * 
-         (superBlock->blocksize << superBlock->log_zone_size), SEEK_CUR);
+         zoneSize(superBlock), SEEK_CUR);
          /* Read through the directory names and return the inode of the 
           * matched directory */
          while (numDirectories--) {
@@ -284,9 +150,9 @@ struct inode* getDirectory(FILE *fileImage,
 struct directoryEntry *getIndirectBlock(FILE *fileImage,
                                     struct inode *node,
                                     struct superblock *superBlock,
-                                    struct partitionEntry **partitionTable,
+                                    struct partitionEntry *partitionTable,
                                     int whichPartition,
-                                    struct partitionEntry **subPartitionTable,
+                                    struct partitionEntry *subPartitionTable,
                                     int whichSubPartition,
                                     char *fileToGet) {
 
@@ -353,9 +219,9 @@ struct directoryEntry *getIndirectBlock(FILE *fileImage,
 int navigatePath(FILE *fileImage,
                  struct inode **origNode,
                  struct superblock *superBlock,
-                 struct partitionEntry **partitionTable,
+                 struct partitionEntry *partitionTable,
                  int whichPartition,
-                 struct partitionEntry **subPartitionTable,
+                 struct partitionEntry *subPartitionTable,
                  int whichSubPartition,
                  char *path) {
    char *originalPath = strdup(path);

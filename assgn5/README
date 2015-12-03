@@ -1,0 +1,13 @@
+MINLS and MINGET 
+CPE 453 Assignment 5
+Lance Boettcher (lboettch)
+Christina Sardo (csardo)
+
+To compile and test these programs type "make all" or just "make".
+
+To compile one at a time, type "make minls" or "make minget"
+
+Other Notes:
+   We are aware there is a lot of duplicate code in minls.c and minget.c, especially in the initFileSystem function. We decided to leave the duplicate code because it sets multiple global variables and setting them all in an external function via double pointers not only leaves more room for error on our part but also makes the code more difficult to follow for any potential future readers.
+
+   Only minls and minget are commented.

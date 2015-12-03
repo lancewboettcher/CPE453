@@ -3,9 +3,9 @@
 struct inode* getInode(FILE *fileImage, 
                        struct superblock *superBlock, 
                        int whichPartition, 
-                       struct partitionEntry **partitionTable, 
+                       struct partitionEntry *partitionTable, 
                        int whichSubPartition, 
-                       struct partitionEntry **subPartitionTable, 
+                       struct partitionEntry *subPartitionTable, 
                        uint32_t nodeOffset) {
    struct inode *node = malloc(sizeof(struct inode));
   
@@ -38,9 +38,9 @@ struct inode* getInode(FILE *fileImage,
 struct inode* getIndirectInode(FILE *fileImage, 
                        struct superblock *superBlock, 
                        int whichPartition, 
-                       struct partitionEntry **partitionTable, 
+                       struct partitionEntry *partitionTable, 
                        int whichSubPartition, 
-                       struct partitionEntry **subPartitionTable, 
+                       struct partitionEntry *subPartitionTable, 
                        uint32_t zone) {
    struct inode *indirectNode = malloc(sizeof(struct inode));
 

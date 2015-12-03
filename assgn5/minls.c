@@ -1,7 +1,3 @@
-//TODO: read path from command line
-//TODO: add 4 primary partition tables
-//TODO: add subpartition table functionality
-//TODO: check for errors in every malloc
 #ifndef FILESYSTEM_H
 #include "filesystem.h"
 #endif
@@ -14,6 +10,10 @@
 #include "superblock.h"
 #endif 
 
+#ifndef PARTITION_H
+#include "partition.h"
+#endif 
+
 #define TRUE 1
 #define FALSE 0
 #define BYTESIZE 8
@@ -23,8 +23,8 @@
 
 /* Global Variables */
 struct superblock *superBlock = NULL;
-struct partitionEntry *partitionTable[4] = {NULL};
-struct partitionEntry *subPartitionTable[4] = {NULL};
+struct partitionEntry *partitionTable = NULL;
+struct partitionEntry *subPartitionTable = NULL;
 struct inode *node = NULL;
 
 /* Function Prototypes */
@@ -95,21 +95,13 @@ int main (int argc, char *argv[]) {
       fileName = malloc(sizeof(char) * FILENAME_LENGTH);
       
       /* Check if filename has a leading '/' if not, add it */
-      //if (argv[argc - 1][0] == '/') {
-         //sprintf(fileName, "%s%s", argv[argc - 1], argv[i]);
-         
-         pathName = argv[argc - 1];
-         fileName = argv[i];
-/*
-      }
-      else {
-         sprintf(fileName, "%s/%s", argv[argc - 1], argv[i]);
-      }*/
+      pathName = argv[argc - 1];
    }
-   else {
-      fileName = argv[i];
-   }
-
+   
+   /* At this point i should be pointing to the argument immediately after
+    * the option flags. This is the name of the file image to read. */
+   fileName = argv[i];
+   
    /* Open file image for reading */
    fileImage = fopen(fileName, "r");
 
@@ -120,17 +112,27 @@ int main (int argc, char *argv[]) {
       return EXIT_FAILURE;
    }
    
-   /* Error message handling */
-   if ((errorMessage = 
-            initFileSystem(fileImage, whichPartition, 
+   /* Initialize the file system by setting all of the structues (superblock, 
+    * partition tables, etc). If the function has a return value that means an
+    * error has occured, handle it accordingly. */
+   if ((errorMessage = initFileSystem(fileImage, whichPartition, 
                whichSubPartition, pathName))) {
          if (errorMessage == INVALID_PARTITION) {
+            /* The partition table specified is not valid. This can be due to 
+             * a bad magic number, not a minix partition, etc */
             fprintf(stderr, "Unable to open disk image \"%s\".\n", fileName);
          }
          else if (errorMessage == NO_FILE_FOUND) {
+            /* If a certain file path was specified to list but the path
+             * is not valid or the file does not exist, return no file found */
             fprintf(stderr, "%s: File not found.\n", pathName);
          }
          else if (errorMessage != BAD_MAGIC_NUMBER) {
+            /* For all other errors (except when the superblock contains a 
+             * bad magic number) print out that an error occured when 
+             * attempting to initialize the file system. Don't print anything
+             * when a superblock has a bad magic number in order to match 
+             * the output of the demo minls */
             fprintf(stderr, "An error occured when attempting to initialize "
                   "the file system\n");
          }
@@ -138,100 +140,54 @@ int main (int argc, char *argv[]) {
       return EXIT_FAILURE;
    }
 
+   /* If the verbose flag was specifed this boolean will be true and the
+    * printVerbose function will print contents of superblock */
    if (verbose) {
       printVerbose(partitionTable, subPartitionTable, superBlock, node);
    }
 
+   /* At this point the file system is initialized and read, the pathName (if
+    * any) was found and the global 'node' variable is pointing to it. Now
+    * can print the contents of the directory */
    printDirectories(fileImage, whichPartition, whichSubPartition, pathName);
+   
    fclose(fileImage);
+   free(superBlock);
+   free(node);
+   free(partitionTable);
+   free(subPartitionTable);
+
    return EXIT_SUCCESS;
 }
 
 int initFileSystem(FILE *fileImage, int whichPartition, 
       int whichSubPartition, char *pathName) {
-   int i;
-   uint8_t bootSectValidation510, bootSectValidation511;
-   
    /* If a partitition was specified, check the partition table for validity */
-   if (whichPartition >= 0) {
-
-      fseek(fileImage, BOOT_SECTOR_BYTE_510, SEEK_SET);
-      fread(&bootSectValidation510, sizeof(uint8_t), 1, fileImage);
-      fread(&bootSectValidation511, sizeof(uint8_t), 1, fileImage);
-
-      if (bootSectValidation510 != BOOT_SECTOR_BYTE_510_VAL ||
-            bootSectValidation511 != BOOT_SECTOR_BYTE_511_VAL) {
-         fprintf(stderr, "Partition table does not contain a "
-               "valid signature\n");
-
+   if (getPartitionTable(fileImage, &partitionTable, whichPartition, 0)) {
          return INVALID_PARTITION;
-      }
-      
-      /* Seek to partition sector and read the table */
-      fseek(fileImage, PARTITION_TABLE_LOC, SEEK_SET);
-
-      for (i=0; i<NUM_PRIMARY_PARTITIONS; i++) {
-         partitionTable[i] = malloc(sizeof(struct partitionEntry));
-
-         fread(partitionTable[i], sizeof(struct partitionEntry), 1,
-               fileImage);
-         
-         
-      }
-      
-      /* Check if the partition table is valid before proceeding */
-      if (partitionTable[whichPartition]->type != MINIX_PARTITION_TYPE) {
-         fprintf(stderr, "Not a Minix partition.\n");
-
-         return INVALID_PARTITION;
-      }
-
    }
    
-   /* Search for sub partiton, if any */
    if (whichSubPartition >= 0) {
-      /* Seek to the sector that lFirst of the specified partition points to */
-      fseek(fileImage, SECTOR_SIZE * partitionTable[whichPartition]->lFirst, 
-            SEEK_SET);
-      
-      fseek(fileImage, BOOT_SECTOR_BYTE_510, SEEK_CUR);
-      fread(&bootSectValidation510, sizeof(uint8_t), 1, fileImage);
-      fread(&bootSectValidation511, sizeof(uint8_t), 1, fileImage);
-
-      if (bootSectValidation510 != BOOT_SECTOR_BYTE_510_VAL ||
-            bootSectValidation511 != BOOT_SECTOR_BYTE_511_VAL) {
-         fprintf(stderr, "Partition table does not contain a "
-               "valid signature\n");
-
+      /* Check the bytes 510 and 511 of the partition table for the magic 
+       * numbers */
+      if (checkPartitionMagic(fileImage, partitionTable, whichPartition)) {
+         /* If there was a return value, that means an error occured and the
+          * partition is invalid */
          return INVALID_PARTITION;
       }
-      fseek(fileImage, SECTOR_SIZE * partitionTable[whichPartition]->lFirst, 
-            SEEK_SET);
-      /* Now seek to the partition table of that sub partition */
-      fseek(fileImage, PARTITION_TABLE_LOC, SEEK_CUR);
-
-      /* Read the subpartition table */
-      for (i=0; i<NUM_PRIMARY_PARTITIONS; i++) {
-         subPartitionTable[i] = malloc(sizeof(struct partitionEntry));
-
-         fread(subPartitionTable[i], 
-               sizeof(struct partitionEntry), 1, fileImage);
-
-         /* Check if the subpartition table is valid before proceeding */
-         //TODO: INCLUDE THIS ERROR CHECKING??
-         /*if (i == whichSubPartition && 
-           (subPartitionTable[i]->bootind != BOOTABLE_MAGIC_NUM 
-            || subPartitionTable[i]->type != MINIX_PARTITION_TYPE)) {
-            fprintf(stderr, "Invalid partition table.\n");
-
+      
+      /* Search for sub partiton, if any */
+      if (getPartitionTable(fileImage, &subPartitionTable, whichSubPartition,
+               partitionTable[whichPartition].lFirst)) {
             return INVALID_PARTITION;
-         }*/
       }
    }
-   
+
+   /* Grab superBlock from fileImage and set the global variable */
    superBlock = getSuperblock(fileImage, whichPartition, partitionTable, 
          whichSubPartition, subPartitionTable);
 
+   /* Check if superBlock is valid minix superblock */
    if (superBlock->magic != MAGIC_NUMBER) {
       fprintf(stderr, "Bad magic number. (0x%.4u)\n", superBlock->magic);
       fprintf(stderr, "This doesn't look like a MINIX filesystem.\n");
@@ -239,14 +195,16 @@ int initFileSystem(FILE *fileImage, int whichPartition,
       return BAD_MAGIC_NUMBER;
    }
 
-   //if (whichSubPartition >= 0) {
-      node = getInode(fileImage, superBlock, whichPartition, partitionTable,
+   /* Grab the root inode from fileImage and set the global variable.
+    * It's the first inode of the block, thus offset (last parameter)
+    * is 0. */
+   node = getInode(fileImage, superBlock, whichPartition, partitionTable,
             whichSubPartition, subPartitionTable, 0);
-   /*}
-   else {
-      node = getInode(fileImage, superBlock, 0, 0);
-   }*/
 
+   /* If optional pathname specified, search through all of the directory
+    * entried for it and navigate through the file image via inodes. This
+    * function also sets the global 'node' variable to the inode that the 
+    * pathname specifies */
    if (pathName != NULL) {
       if (navigatePath(fileImage, &node, superBlock, partitionTable,
                whichPartition, subPartitionTable, whichSubPartition, 
@@ -262,54 +220,69 @@ void printDirectories(FILE *fileImage,
                       int whichPartition, 
                       int whichSubPartition,
                       char *pathName) {
-   int numZones = (node->size /
-            (superBlock->blocksize << superBlock->log_zone_size)) + 1;
+   int numZones;
    int zoneIdx = 0;
    
-   /* If a pathname is specified, navigate to that path */
    if (pathName && !(node->mode & DIRECTORY_MASK)) {
+      /* If a pathname is specified and it points to a single file (not a 
+       * directory) only need to list that single file and its permissions */
       printf("%s\t%u %s\n", getPermissions(node->mode), 
          node->size, pathName);
    }
    else {
-      /* If no path specified, start at the root */
-      if (!pathName)
+      if (!pathName) {
+         /* If no path specified, start at the root */
          printf("/:\n");
-      else
+      }
+      else {
+         /* Print the path to the directory that will be listed */
          printf("%s:\n", pathName);
+      }
 
       /* Create a temp directory entry to store info */
       struct directoryEntry *dir = malloc(sizeof(struct directoryEntry));
       struct inode *tempNode;
-      char *dirName;
-      int numDirectories;
+      int numEntries;
 
       /* Check if the size od data is greater than the amount of one zone, 
        * if it is we're going to need to loop through zones */
-      numZones = (node->size / zoneSize(superBlock)) + 1;
+      numZones = getNumberOfZones(fileImage, superBlock, node);
       
       if (numZones > DIRECT_ZONES) {
-               numZones = DIRECT_ZONES;
-            }
+         /* If number of zones is greater than the amount the direct zones can
+          * hole, then set numZones to the max amount of direct zones, (because
+          * you can't iterate through more than that until getting to indirect
+          * zones). Else it will be set to however many zones it needs */
+         numZones = DIRECT_ZONES;
+      }
       
       while (numZones--) {
          if (numZones > 0) {
-            /* numDirectories = entries per zone */
-            numDirectories = zoneSize(superBlock) / DIRECTORY_ENTRY_SIZE;
-
-           
+            /* if numZones left is > 0, that means this is not the last zone
+             * to read, so numEntries to read is set to the max amount that 
+             * can be read in a zone */
+            numEntries = entriesPerZone(superBlock);
          }
          else {
-            numDirectories = node->size / DIRECTORY_ENTRY_SIZE;
+            /* Last direct node to read*/
 
-            if ((numDirectories * DIRECTORY_ENTRY_SIZE) > 
-                  zoneSize(superBlock)) {
+            /* Get total number of entries to read for a node of this size */
+            numEntries = node->size / DIRECTORY_ENTRY_SIZE;
+
+            if ((numEntries * DIRECTORY_ENTRY_SIZE) > zoneSize(superBlock)) {
+               /* If the amount of space needed for this number of entries
+                * is greater than one zone (the last direct zone specified) */
                if (node->indirect) {
-                  numDirectories = (zoneSize(superBlock) /
-                        DIRECTORY_ENTRY_SIZE);
+                  /* If the node has more data in an indirect zone, then set
+                   * the amount of entries to read to the max amount (since
+                   * this is not the last data to be read). */
+                  numEntries = entriesPerZone(superBlock);
                }
                else {
-                  numDirectories %= DIRECTORY_ENTRY_SIZE;
+                  /* No more zones to read, divide the total numEntires read
+                   * by the size of a directory entry, should be left over with
+                   * the amount of entries that still need to be read */
+                  numEntries %= DIRECTORY_ENTRY_SIZE;
                }
             }
          }
@@ -318,21 +291,25 @@ void printDirectories(FILE *fileImage,
          seekPastPartitions(fileImage, partitionTable, whichPartition,
             subPartitionTable, whichSubPartition); 
          
-         /* Navigate to data zone */
          if (pathName || zoneIdx) {
-            fseek(fileImage, node->zone[zoneIdx] * 
-              zoneSize(superBlock), SEEK_CUR);
-
+            /* Navigate to data zone */
+            fseek(fileImage, node->zone[zoneIdx] * zoneSize(superBlock), 
+                  SEEK_CUR);
          }
          else {
+            /* Else seek from beginning of file */
             fseek(fileImage, superBlock->firstdata * zoneSize(superBlock), 
                   SEEK_CUR);
          }
 
-         while(numDirectories--) {
+         /* Read the amount od directory entries specified */
+         while(numEntries--) {
             fread(dir, sizeof(struct directoryEntry), 1, fileImage);
-            dirName = (char*)dir->filename;
+            
+            /* If the inode of the directory is not zero, the entry is not
+             * marked as deleted and is valid. */
             if (dir->inode != 0) {
+               /* Grab the inode specified and print the contents */
                tempNode = getInode(fileImage, superBlock, whichPartition,
                         partitionTable, whichSubPartition, subPartitionTable,
                         dir->inode);
@@ -347,6 +324,10 @@ void printDirectories(FILE *fileImage,
       zoneIdx++;
       }
       
+      /* If the node has data in an direct zone, grab the indirect zone,
+       * iterate through all of the zones specifed, and print them out. 
+       * Because we want to list all files and not just return the one 
+       * specified, the fileToGet (last parameter) is NULL */
       if (node->indirect) {
          getIndirectBlock(fileImage, node, superBlock,
             partitionTable, whichPartition, subPartitionTable,

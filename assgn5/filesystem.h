@@ -109,21 +109,16 @@ struct directoryEntry {
 };
 
 extern void printHelp(void);
-extern void printPartitionTable(struct partitionEntry**,
-      struct partitionEntry**);
-extern void printVerbose(struct partitionEntry**,
-      struct partitionEntry**, struct superblock*, struct inode*);
-extern void seekPastPartitions(FILE*, struct partitionEntry**, int,
-      struct partitionEntry**, int);
+extern void printVerbose(struct partitionEntry*,
+      struct partitionEntry*, struct superblock*, struct inode*);
 extern struct inode* getDirectory(FILE*, struct inode *, struct superblock *,
-      struct partitionEntry **, int, struct partitionEntry **, int, char *);
+      struct partitionEntry *, int, struct partitionEntry *, int, char *);
 extern struct directoryEntry* getIndirectBlock(FILE*, struct inode *,
-      struct superblock *, struct partitionEntry **, int, 
-      struct partitionEntry **, int, char *);
+      struct superblock *, struct partitionEntry *, int, 
+      struct partitionEntry *, int, char *);
 extern int navigatePath(FILE*, struct inode **,
-      struct superblock *, struct partitionEntry **, int, 
-      struct partitionEntry **, int, char *);
-extern int  getPartitionTables(FILE*, struct partitionEntry***, int,
-      struct partitionEntry***, int);
+      struct superblock *, struct partitionEntry *, int, 
+      struct partitionEntry *, int, char *);
 extern int getNumberOfZones(FILE*, struct superblock*, struct inode*);
-extern int checkPartitionMagic(FILE*, struct partitionEntry**, int);
+extern void seekPastPartitions(FILE*, struct partitionEntry*, int,
+      struct partitionEntry*, int);

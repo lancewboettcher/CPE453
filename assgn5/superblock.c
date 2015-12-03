@@ -35,8 +35,8 @@ void printSuperblock(struct superblock *superBlock) {
 }
 
 struct superblock* getSuperblock(FILE *fileImage, 
-      int whichPartition, struct partitionEntry **partitionTable,
-      int whichSubPartition, struct partitionEntry **subPartitionTable) {
+      int whichPartition, struct partitionEntry *partitionTable,
+      int whichSubPartition, struct partitionEntry *subPartitionTable) {
    /* Initialize the block */
    struct superblock *superBlock = malloc(sizeof(struct superblock));
 
@@ -47,12 +47,12 @@ struct superblock* getSuperblock(FILE *fileImage,
     *     * else use the subpartition specified and seek to that boot block */
    if (whichPartition >= 0) {
       fseek(fileImage, SECTOR_SIZE * 
-         partitionTable[whichPartition]->lFirst, SEEK_SET);
+         partitionTable[whichPartition].lFirst, SEEK_SET);
    }
    
    if (whichSubPartition >= 0) {
       fseek(fileImage, SECTOR_SIZE * 
-      subPartitionTable[whichSubPartition]->lFirst, SEEK_SET);
+      subPartitionTable[whichSubPartition].lFirst, SEEK_SET);
    }
       
    /* Seek past the 1KB of boot sector */
